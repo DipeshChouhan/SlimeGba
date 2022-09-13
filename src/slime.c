@@ -1,8 +1,6 @@
-#include "arm/arm.h"
-#include "arm/bus.h"
-
+#include <stdio.h>
 int main() {
-    arm();
-    bus();
+
+    printf("slime is a 'Gameboy Advance emulator'\n");
     return 0;
 }

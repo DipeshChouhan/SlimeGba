@@ -1,92 +1,17 @@
 /* TODO - Check decoder code */
 #include <stdio.h>
 #include "arm.h"
+#include "inst_decode.h"
 
-#define NF_SET(_reg) ((_reg & (1 << 31)) > 0)
-
-#define ZF_SET(_reg) ((_reg & (1 << 30)) > 0)
-
-#define CF_SET(_reg) ((_reg & (1 << 29)) > 0)
-
-#define VF_SET(_reg) ((_reg & (1 << 28)) > 0)
-#define UNCONDITIONAL_ENCODE 0b11110000000000000000000000000000
-
-#define MULTIPLY_ENCODE 0b00001111000000000000000011110000
-#define MULTIPLY_DECODE 0b00000000000000000000000010010000
-
-#define LOAD_STORE_ENCODE 0b00001110000000000000000010010000
-#define LOAD_STORE_DECODE 0b00000000000000000000000010010000
-#define LOAD_STORE_ENCODE1 0b00000001000000000000000001100000
-
-#define LOAD_STORE_MULTIPLE_ENCODE 0b00001110000000000000000000000000
-#define LOAD_STORE_MULTIPLE_DECODE 0b00001000000000000000000000000000
-
-#define LOAD_STORE_IM_ENCODE 0b00001110000000000000000000000000
-#define LOAD_STORE_IM_DECODE 0b00000100000000000000000000000000
-
-#define LOAD_STORE_REG_ENCODE 0b00001110000000000000000000010000
-#define LOAD_STORE_REG_DECODE 0b00000110000000000000000000000000
-
-#define CONTROL_DATA_ENCODE 0b00001100000000000000000000000000
-
-#define CONTROL_DSP_ENCODE 0b00000001100100000000000000000000
-#define CONTROL_DSP_DECODE 0b00000001000000000000000000000000
-
-#define CONTROL_DSP_ENCODE1 0b00000010000000000000000010010000
-#define CONTORL_DSP_DECODE1 0b00000000000000000000000010010000
-
-#define BX_ENCODE 0b00001111111100000000000011110000
-#define BX_DECODE 0b00000001001000000000000000010000
-#define BBL_ENCODE 0b00001110000000000000000000000000
-#define BBL_DECODE 0b00001010000000000000000000000000
-
-#define COPROC_DATA_ENCODE 0b00001111000000000000000000010000
-#define COPROC_DATA_DECODE 0b00001110000000000000000000000000
-
-#define COPROC_REG_ENCODE 0b00001111000000000000000000010000
-#define COPROC_REG_DECODE 0b00001110000000000000000000010000
-
-#define COPROC_LOAD_STORE_ENCODE 0b00001110000000000000000000000000
-#define COPROC_LOAD_STORE_DECODE 0b00001100000000000000000000000000
-
-#define SWI_ENCODE 0b00001111000000000000000000000000
-
-#define IRQ_DISABLE(_reg) ((_reg & (1 << 7)) > 0)
-#define FIQ_DISABLE(_reg) ((_reg & (1 << 6)) > 0)
-
-// 1 for thumb state and 0 for arm state
-#define STATE_BIT(_reg) ((_reg & (1 << 5)) > 0)
 
 #define OP_CODE arm->data_bus
 
-// TODO: default - unrecoverable state apply reset
-#define SET_MODE(_reg, _mode)                                                  \
-    switch (_reg & 0b11111) {                                                  \
-    case 0b10000:                                                              \
-        _mode = USR;                                                           \
-    case 0b10001:                                                              \
-        _mode = FIQ;                                                           \
-    case 0b10010:                                                              \
-        _mode = IRQ;                                                           \
-    case 0b10011:                                                              \
-        _mode = SVC;                                                           \
-    case 0b10111:                                                              \
-        _mode = ABT;                                                           \
-    case 0b11011:                                                              \
-        _mode = UND;                                                           \
-    case 0b11111:                                                              \
-        _mode = SYS;                                                           \
-    default:                                                                   \
-    }
-
-static int execute_instruction;
 int arm_exec(Arm *arm) {
 
     // static void *dp_inst_table[] = {&&DO_AND, &&DO_EOR, &&DO_SUB, &&DO_RSB,
     //                                 &&DO_ADD, &&DO_ADC, &&DO_SBC, &&DO_RSC,
     //                                 &&DO_TST, &&DO_TEQ, &&DO_CMP, &&DO_CMN,
-    //                                 &&DO_ORR, &&DO_MOV, &&DO_BIC, &&DO_MVN};
-    // static void *mult_inst_table[] = {
+    //                                 &&DO_ORR, &&DO_MOV, &&DO_BIC, &&DO_MVN}; static void *mult_inst_table[] = {
     //     &&DO_UND_MULTIPLY, &&DO_MUL,   &&DO_UND_MULTIPLY, &&DO_UND_MULTIPLY,
     //     &&DO_UMULL,        &&DO_UMLAL, &&DO_SMULL,        &&DO_SMLAL,
     //

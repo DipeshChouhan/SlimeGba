@@ -1,6 +1,5 @@
-#ifndef SLIME_BUS_H 
-#define SLIME_BUS_H
+#ifndef SLIME_SYS_BUS_H 
+#define SLIME_SYS_BUS_H
 
-void bus();
 
 #endif /* !SLIME_BUS_H */

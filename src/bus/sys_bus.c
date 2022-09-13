@@ -1,6 +1,3 @@
-#include "bus.h"
+#include "sys_bus.h"
 #include<stdio.h>
 
-void bus() {
-    printf("calle bus()\n");
-}
