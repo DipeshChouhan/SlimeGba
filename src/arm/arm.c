@@ -2,11 +2,17 @@
 #include "arm.h"
 #include "disassembler.h"
 #include "inst_decode.h"
+#include <stdint.h>
 #include <stdio.h>
 #define DEBUG_ON
 
 #define OP_CODE arm->data_bus
+
+
+
 int arm_exec(Arm *arm) {
+
+  uint32_t temp = 0;
 
   static void *dp_inst_table[] = {&&AND_INST, &&EOR_INST, &&SUB_INST, &&RSB_INST,
                                   &&ADD_INST, &&ADC_INST, &&SBC_INST, &&RSC_INST,
@@ -99,6 +105,43 @@ LOAD_STORE_M:
   write_instruction_log(arm, "load_store_m");
   goto END;
 DATA_PROCESS:
+
+  // shifter operand processing
+
+  if ((OP_CODE & SHIFTER_IMM_MASK) == SHIFTER_IMM_DECODE) {
+    // immediate
+  }
+
+  temp = OP_CODE & SHIFTER_REG_MASK;
+  if (temp == SHIFTER_REG_DECODE) {
+
+  } else if (temp == SHIFTER_ROR_EXTEND_DECODE) {
+
+  }
+
+  temp = OP_CODE & SHIFTER_LSL_IMM_MASK;
+  if (temp == SHIFTER_LSL_IMM_DECODE) {
+
+  } else if (temp == SHIFTER_LSR_IMM_DECODE) {
+
+  } else if (temp == SHIFTER_ASR_IMM_DECODE) {
+
+  } else if (temp == SHIFTER_ROR_IMM_DECODE) {
+
+  }
+
+  temp = OP_CODE & SHIFTER_LSL_REG_MASK;
+
+  if (temp == SHIFTER_LSL_REG_DECODE) {
+    
+  } else if (temp == SHIFTER_LSR_REG_DECODE) {
+    
+  } else if (temp == SHIFTER_ASR_REG_DECODE) {
+
+  } else if (temp == SHIFTER_ROR_REG_DECODE) {
+
+  }
+  
   write_instruction_log(arm, "data process");
   goto END;
 SWI:
