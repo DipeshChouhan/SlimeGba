@@ -40,11 +40,6 @@
 #define COPROCESSOR_MASK 0xC000000
 #define COPROCESSOR_DECODE 0xC000000
 
-#define SWP_MASK 0x4000F0
-#define SWP_DECODE 0x90
-
-#define SWPB_MASK 0x4000F0
-#define SWPB_DECODE 0x400090
 // 1 for thumb state and 0 for arm state
 #define STATE_BIT(_reg) ((_reg & (1 << 5)) > 0)
 

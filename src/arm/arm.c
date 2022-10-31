@@ -1,5 +1,6 @@
 /* TODO - Check decoder code */
 #include "arm.h"
+#include "disassembler.h"
 #include "inst_decode.h"
 #include <stdio.h>
 #define DEBUG_ON
@@ -24,7 +25,7 @@ int arm_exec(Arm *arm) {
       &&CHECK_GT, &&CHECK_LE, &&CHECK_AL,    &&UNCONDITIONAL};
   // fetch() opcode in data bus
   // do decode
-  goto DECODE;
+  // goto DECODE;
 
   goto *cond_field_table[OP_CODE >> 28];
 
@@ -54,17 +55,12 @@ DECODE:
     // Load and store halfword or doubleword, and load signed byte instructions
     goto LOAD_STORE_H_D_S;
   } else if ((OP_CODE & DATA_PROCESS_MASK) == DATA_PROCESS_DECODE){
-    // instructions can data processing, control or undefined or swp or swbp
+    // instructions can data processing, control or undefined
     if ((OP_CODE & CONTROL_MASK) != CONTROL_DECODE) {
       // instructions are data processing
       goto DATA_PROCESS;
     }
 
-    if ((OP_CODE & SWP_MASK) == SWP_DECODE) {
-      // swp instruction
-    } else if ((OP_CODE & SWPB_MASK) == SWPB_DECODE) {
-      // swpb instruction
-    }
     goto CONTROL;
 
     // control instruction
@@ -91,16 +87,39 @@ DECODE:
   }
 
 MULTIPLY:
+  write_instruction_log(arm, "multiply");
+  goto END;
 LOAD_STORE_H_D_S:
+  write_instruction_log(arm, "load_store_h_d_s");
+  goto END;
 LOAD_STORE_W_U:
+  write_instruction_log(arm, "load_store_w_u");
+  goto END;
 LOAD_STORE_M:
+  write_instruction_log(arm, "load_store_m");
+  goto END;
 DATA_PROCESS:
+  write_instruction_log(arm, "data process");
+  goto END;
 SWI:
+  write_instruction_log(arm, "swi");
+  goto END;
 CONTROL:
+  write_instruction_log(arm, "control");
+  goto END;
 BRANCH_LINK:
+  write_instruction_log(arm, "branch_link");
+  goto END;
 COPROCESSOR:
+  write_instruction_log(arm, "coprocessor");
+  goto END;
 UNDEFINED:
+  write_instruction_log(arm, "undefined");
+  goto END;
+
 UNCONDITIONAL:
+  printf("UNCONDITIONAL\n");
+  goto END;
   // unpredictable
 
 AND_INST:
@@ -120,5 +139,6 @@ MOV_INST:
 BIC_INST:
 MVN_INST:
 
+END:
   return 0;
 }
