@@ -44,7 +44,7 @@ void write_instruction_log(Arm *arm, char *name) {
   cJSON *r12 = cJSON_CreateNumber(arm->general_regs[12]);
   cJSON *r13 = cJSON_CreateNumber(arm->general_regs[13]);
   cJSON *r14 = cJSON_CreateNumber(arm->general_regs[14]);
-  cJSON *r15 = cJSON_CreateNumber(arm->r15);
+  cJSON *r15 = cJSON_CreateNumber(arm->general_regs[15]);
   cJSON *cpsr = cJSON_CreateNumber(arm->cpsr);
 
   cJSON_AddItemToObject(inst, "instruction", inst_name);

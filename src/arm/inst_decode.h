@@ -1,17 +1,8 @@
 #ifndef SLIME_INST_DECODE_H
 #define SLIME_INST_DECODE_H
 
-#define NF_SET(_reg) ((_reg & (1 << 31)) > 0)
-
-#define ZF_SET(_reg) ((_reg & (1 << 30)) > 0)
-
-#define CF_SET(_reg) ((_reg & (1 << 29)) > 0)
-
-#define VF_SET(_reg) ((_reg & (1 << 28)) > 0)
 
 
-#define IRQ_DISABLE(_reg) ((_reg & (1 << 7)) > 0)
-#define FIQ_DISABLE(_reg) ((_reg & (1 << 6)) > 0)
 
 #define MULTIPLY_MASK 0xF0000F0
 #define MULTIPLY_DECODE 0x90
@@ -45,9 +36,11 @@
 #define SHIFTER_REG_MASK 0x2000FF0
 #define SHIFTER_REG_DECODE 0x0
 
+#define SHIFTER_SHIFT_IMM_MASK 0x2000070
 #define SHIFTER_LSL_IMM_MASK 0x2000070
 #define SHIFTER_LSL_IMM_DECODE 0x0
 
+#define SHIFTER_SHIFT_REG_MASK 0x20000F0
 #define SHIFTER_LSL_REG_MASK 0x20000F0
 #define SHIFTER_LSL_REG_DECODE 0x10
 
