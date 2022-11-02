@@ -23,7 +23,7 @@ void init_arm(Arm *arm) {
 
   int index = 0;
 
-  while(index < 16) {
+  while (index < 16) {
     arm->general_regs[index] = 0;
     if (index < 7) {
       arm->fiq_regs[index] = 0;
@@ -36,6 +36,14 @@ void init_arm(Arm *arm) {
     }
     ++index;
   }
+
+  arm->cpsr = 0;
+  arm->spsr_fiq = 0;
+  arm->spsr_abt = 0;
+  arm->spsr_irq = 0;
+  arm->spsr_svc = 0;
+  arm->spsr_und = 0;
+  arm->state = 0; // default arm state
 
   // all global test goes here
 #ifdef DEBUG_ON
@@ -57,8 +65,14 @@ int arm_exec(Arm *arm) {
 
   uint32_t temp = 0;
   uint32_t shifter_operand = 0;
-  int shifter_carry_out = 0;
+  uint32_t shifter_carry_out = 0;
   uint32_t ls_address = 0; // load store address
+  uint32_t rm = 0;
+  uint32_t rd = 0;
+  uint32_t rs = 0;
+  uint32_t rn = 0;
+  uint32_t shift_imm;
+  uint32_t rotate_imm;
 
   static void *dp_inst_table[] = {
       &&AND_INST, &&EOR_INST, &&SUB_INST, &&RSB_INST, &&ADD_INST, &&ADC_INST,
@@ -156,11 +170,14 @@ DATA_PROCESS:
 
 #define ROTATE_IMM ((OP_CODE >> 8) & 0xF)
 #define IMM_8 (OP_CODE & 0xFF)
-#define SHIFT_IMM ((OP_CODE & 7) & 0x1F)
-#define RN ((OP_CODE >> 16) & 0xF)
-#define RD ((OP_CODE >> 12) & 0xF)
-#define RM (OP_CODE & 0xF)
-#define RS ((OP_CODE >> 8) & 0xF)
+#define SHIFT_IMM ((OP_CODE >> 7) & 0x1F)
+#define RN_C ((OP_CODE >> 16) & 0xF)
+#define RD_C ((OP_CODE >> 12) & 0xF)
+#define RM_C (OP_CODE & 0xF)
+#define RS_C ((OP_CODE >> 8) & 0xF)
+#define INST_OPCODE ((OP_CODE >> 21) & 0xF)
+  rd = arm->general_regs[RD_C];
+  rn = arm->general_regs[RN_C];
 
   if ((OP_CODE & SHIFTER_IMM_MASK) == SHIFTER_IMM_DECODE) {
     // shifter_operand = immed_8 Rotate_Right (rotate_imm * 2)
@@ -169,29 +186,40 @@ DATA_PROCESS:
     // else /* rotate_imm != 0 */
     // shifter_carry_out = shifter_operand[31]
     // immediate
-    temp = ROTATE_IMM;
+    rotate_imm = ROTATE_IMM;
 
-    if (temp == 0) {
+    if (rotate_imm == 0) {
       shifter_operand = IMM_8;
       shifter_carry_out = GET_BIT(arm->cpsr, CF_BIT);
     } else {
-      temp *= 2;
-      shifter_operand = ROTATE_RIGHT32(IMM_8, temp);
+      rotate_imm *= 2;
+      shifter_operand = ROTATE_RIGHT32(IMM_8, rotate_imm);
       shifter_carry_out = GET_BIT(shifter_operand, 31);
     }
+    goto *dp_inst_table[INST_OPCODE];
   }
 
   temp = OP_CODE & SHIFTER_REG_MASK;
+  rm = arm->general_regs[RM_C];
   if (temp == SHIFTER_REG_DECODE) {
     // shifter_operand = Rm
     // shifter_carry_out = C Flag
-    shifter_operand = RM; // TODO - change to register
+    shifter_operand = rm; // TODO - change to register
     shifter_carry_out = GET_BIT(arm->cpsr, CF_BIT);
+    goto *dp_inst_table[INST_OPCODE];
 
   } else if (temp == SHIFTER_ROR_EXTEND_DECODE) {
+    // shifter_operand = (C Flag Logical_Shift_Left 31) OR (Rm
+    // Logical_Shift_Right 1) shifter_carry_out = Rm[0]
+
+    temp = GET_BIT(arm->cpsr, CF_BIT) << 31;
+    shifter_operand = temp | (rm >> 1);
+    shifter_carry_out = rm & 1; // bit 0
+    goto *dp_inst_table[INST_OPCODE];
   }
 
   temp = OP_CODE & SHIFTER_SHIFT_IMM_MASK;
+  shift_imm = SHIFT_IMM;
   if (temp == SHIFTER_LSL_IMM_DECODE) {
     // printf("LSL imm\n");
 
@@ -200,31 +228,180 @@ DATA_PROCESS:
     // shifter_operand = Rm Logical_Shift_Left shift_imm
     // shifter_carry_out = Rm[32 - shift_imm]
 
+    shifter_operand = rm << shift_imm;
+    shifter_carry_out = GET_BIT(rm, (32 - shift_imm));
+    goto *dp_inst_table[INST_OPCODE];
+
   } else if (temp == SHIFTER_LSR_IMM_DECODE) {
     // printf("LSR imm\n");
+    // if shift_imm == 0 then
+    // shifter_operand = 0
+    // shifter_carry_out = Rm[31]
+    // else /* shift_imm > 0 */
+    // shifter_operand = Rm Logical_Shift_Right shift_imm
+    // shifter_carry_out = Rm[shift_imm - 1]
+
+    if (shift_imm == 0) {
+      shifter_operand = 0;
+      shifter_carry_out = GET_BIT(rm, 31);
+    } else {
+      shifter_operand = rm >> shift_imm;
+      shifter_carry_out = GET_BIT(rm, (shift_imm - 1));
+    }
+    goto *dp_inst_table[INST_OPCODE];
 
   } else if (temp == SHIFTER_ASR_IMM_DECODE) {
+    // if shift_imm == 0 then
+    // if Rm[31] == 0 then
+    // shifter_operand = 0
+    // shifter_carry_out = Rm[31]
+    // else /* Rm[31] == 1 */
+    // shifter_operand = 0xFFFFFFFF
+    // shifter_carry_out = Rm[31]
+    // else /* shift_imm > 0 */
+    // shifter_operand = Rm Arithmetic_Shift_Right <shift_imm>
+    // shifter_carry_out = Rm[shift_imm - 1]
+    if (shift_imm == 0) {
+
+      shifter_carry_out = GET_BIT(rm, 31);
+      shifter_operand = 0xFFFFFFFF * shifter_carry_out;
+
+    } else {
+
+      shifter_carry_out = GET_BIT(rm, (shift_imm - 1));
+      // Todo check arithmetic shift right
+      shifter_operand = (rm >> shift_imm) |
+                        (shifter_carry_out * (0xFFFFFFFF << (32 - shift_imm)));
+    }
+    goto *dp_inst_table[INST_OPCODE];
 
   } else if (temp == SHIFTER_ROR_IMM_DECODE) {
 
     // printf("ROR imm\n");
+    // shifter_operand = Rm Rotate_Right shift_imm
+    // shifter_carry_out = Rm[shift_imm - 1]
+    shifter_operand = ROTATE_RIGHT32(rm, shift_imm);
+    shifter_carry_out = GET_BIT(rm, (shift_imm - 1));
+    goto *dp_inst_table[INST_OPCODE];
   }
 
   temp = OP_CODE & SHIFTER_SHIFT_REG_MASK;
+  rs = arm->general_regs[RS_C] & 0xFF; // least significant byte of register rs
 
   if (temp == SHIFTER_LSL_REG_DECODE) {
     // printf("LSL reg\n");
+    // if Rs[7:0] == 0 then
+    // shifter_operand = Rm
+    // shifter_carry_out = C Flag
+    // else if Rs[7:0] < 32 then
+    // shifter_operand = Rm Logical_Shift_Left Rs[7:0]
+    // shifter_carry_out = Rm[32 - Rs[7:0]]
+    // else if Rs[7:0] == 32 then
+    // shifter_operand = 0
+    // shifter_carry_out = Rm[0]
+    // else /* Rs[7:0] > 32 */
+    // shifter_operand = 0
+    // shifter_carry_out = 0
 
+    if (rs == 0) {
+      shifter_operand = rm;
+      shifter_carry_out = GET_BIT(arm->cpsr, CF_BIT);
+    } else if (rs < 32) {
+      shifter_operand = rm << rs;
+      shifter_carry_out = GET_BIT(rm, (32 - rs));
+    } else if (rs == 32) {
+      shifter_operand = 0;
+      shifter_carry_out = rm & 1; // bit 0
+    } else {
+      shifter_operand = 0;
+      shifter_carry_out = 0;
+    }
+
+    goto *dp_inst_table[INST_OPCODE];
   } else if (temp == SHIFTER_LSR_REG_DECODE) {
     // printf("lsr reg\n");
+    // if Rs[7:0] == 0 then
+    // shifter_operand = Rm
+    // shifter_carry_out = C Flag
+    // else if Rs[7:0] < 32 then
+    // shifter_operand = Rm Logical_Shift_Right Rs[7:0]
+    // shifter_carry_out = Rm[Rs[7:0] - 1]
+    // else if Rs[7:0] == 32 then
+    // shifter_operand = 0
+    // shifter_carry_out = Rm[31]
+    // else /* Rs[7:0] > 32 */
+    // shifter_operand = 0
+    // shifter_carry_out = 0
 
+    if (rs == 0) {
+      shifter_operand = rm;
+      shifter_carry_out = GET_BIT(arm->cpsr, CF_BIT);
+    } else if (rs < 32) {
+      shifter_operand = rm >> rs;
+      shifter_carry_out = GET_BIT(rm, (rs - 1));
+    } else if (rs == 32) {
+      shifter_operand = 0;
+      shifter_carry_out = GET_BIT(rm, 31);
+    } else {
+      shifter_operand = 0;
+      shifter_carry_out = 0;
+    }
+
+    goto *dp_inst_table[INST_OPCODE];
   } else if (temp == SHIFTER_ASR_REG_DECODE) {
+    // if Rs[7:0] == 0 then
+    // shifter_operand = Rm
+    // shifter_carry_out = C Flag
+    // else if Rs[7:0] < 32 then
+    // shifter_operand = Rm Arithmetic_Shift_Right Rs[7:0]
+    // shifter_carry_out = Rm[Rs[7:0] - 1]
+    // else /* Rs[7:0] >= 32 */
+    // if Rm[31] == 0 then
+    // shifter_operand = 0
+    // shifter_carry_out = Rm[31]
+    // else /* Rm[31] == 1 */
+    // shifter_operand = 0xFFFFFFFF
+    // shifter_carry_out = Rm[31]
 
+    if (rs == 0) {
+      shifter_operand = rm;
+      shifter_carry_out = GET_BIT(arm->cpsr, CF_BIT);
+    } else if (rs < 32) {
+      shifter_operand =
+          (rm >> rs) | (GET_BIT(rm, 31) * (0xFFFFFFFF << (32 - rs)));
+      shifter_carry_out = GET_BIT(rm, (rs - 1));
+    } else {
+      shifter_carry_out = GET_BIT(rm, 31);
+      shifter_operand = shifter_carry_out * 0xFFFFFFFF;
+    }
+
+    goto *dp_inst_table[INST_OPCODE];
   } else if (temp == SHIFTER_ROR_REG_DECODE) {
-    // printf("ROR reg\n");
+    // printf("ROR reg\n");if Rs[7:0] == 0 then
+    // shifter_operand = Rm
+    // shifter_carry_out = C Flag
+    // else if Rs[4:0] == 0 then
+    // shifter_operand = Rm
+    // shifter_carry_out = Rm[31]
+    // else /* Rs[4:0] > 0 */
+    // shifter_operand = Rm Rotate_Right Rs[4:0]
+    // shifter_carry_out = Rm[Rs[4:0] - 1]
+
+    temp = rs & 0x1F;
+    if (rs == 0) {
+      shifter_operand = rm;
+      shifter_carry_out = GET_BIT(arm->cpsr, CF_BIT);
+    } else if (temp == 0) {
+      shifter_operand = rm;
+      shifter_carry_out = GET_BIT(rm, 31);
+    } else {
+      shifter_operand = ROTATE_RIGHT32(rm, temp);
+      shifter_carry_out = GET_BIT(rm, (temp - 1));
+    }
+    goto *dp_inst_table[INST_OPCODE];
   }
 
-  write_instruction_log(arm, "data process");
+  // write_instruction_log(arm, "data process");
   goto END;
 SWI:
   write_instruction_log(arm, "swi");
@@ -250,8 +427,12 @@ UNCONDITIONAL:
 AND_INST:
 EOR_INST:
 SUB_INST:
+  write_instruction_log(arm, "sub");
+  goto END;
 RSB_INST:
 ADD_INST:
+  write_instruction_log(arm, "add");
+  goto END;
 ADC_INST:
 SBC_INST:
 RSC_INST:
@@ -261,6 +442,8 @@ CMP_INST:
 CMN_INST:
 ORR_INST:
 MOV_INST:
+  write_instruction_log(arm, "mov");
+  goto END;
 BIC_INST:
 MVN_INST:
 
