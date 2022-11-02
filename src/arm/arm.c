@@ -1,5 +1,6 @@
 /* TODO - Check decoder code */
 // TODO - test rotate right and shifter operand value
+// TODO seprate flag setting and cpsr = spsr in data processing instructions
 #include "arm.h"
 #include "disassembler.h"
 #include "inst_decode.h"
@@ -12,8 +13,13 @@
 #define ZF_BIT 30
 #define CF_BIT 29
 #define VF_BIT 28
+#define S_BIT 20
 
 #define GET_BIT(_op, _bit) ((_op >> _bit) & 1)
+
+#define SET_BIT(_op, _bit, _to) ((_op & (~(1 << _bit))) | (_to << _bit))
+
+#define IS_BIT_SET(_op, _bit) ((_op & (1 << _bit)) == (1 << _bit))
 #define OP_CODE arm->data_bus
 
 // not considering _ror is zero
@@ -68,11 +74,11 @@ int arm_exec(Arm *arm) {
   uint32_t shifter_carry_out = 0;
   uint32_t ls_address = 0; // load store address
   uint32_t rm = 0;
-  uint32_t rd = 0;
   uint32_t rs = 0;
   uint32_t rn = 0;
-  uint32_t shift_imm;
-  uint32_t rotate_imm;
+  uint32_t shift_imm = 0;
+  uint32_t rotate_imm = 0;
+  uint64_t result = 0;
 
   static void *dp_inst_table[] = {
       &&AND_INST, &&EOR_INST, &&SUB_INST, &&RSB_INST, &&ADD_INST, &&ADC_INST,
@@ -176,7 +182,6 @@ DATA_PROCESS:
 #define RM_C (OP_CODE & 0xF)
 #define RS_C ((OP_CODE >> 8) & 0xF)
 #define INST_OPCODE ((OP_CODE >> 21) & 0xF)
-  rd = arm->general_regs[RD_C];
   rn = arm->general_regs[RN_C];
 
   if ((OP_CODE & SHIFTER_IMM_MASK) == SHIFTER_IMM_DECODE) {
@@ -425,27 +430,164 @@ UNCONDITIONAL:
   // unpredictable
 
 AND_INST:
+  // if ConditionPassed(cond) then
+  // Rd = Rn AND shifter_operand
+  // if S == 1 and Rd == R15 then
+  // if CurrentModeHasSPSR() then
+  // CPSR = SPSR
+  // else UNPREDICTABLE
+  // else if S == 1 then
+  // N Flag = Rd[31]
+  // Z Flag = if Rd == 0 then 1 else 0
+  // C Flag = shifter_carry_out
+  // V Flag = unaffected
+
+  temp = RD_C;
+  arm->general_regs[temp] = rn & shifter_operand;
+  if (IS_BIT_SET(OP_CODE, S_BIT)) {
+    if (temp == 15 && (arm->mode > 1)) {
+      arm->cpsr = arm->spsr[arm->mode - 2];
+    }
+    temp = arm->cpsr & 0x1FFFFFFF;
+    temp |= (arm->cpsr & 0x80000000); // n flag
+    temp |= ((arm->general_regs[temp] == 0) << 30);
+    temp |= (shifter_carry_out << 29);
+    arm->cpsr = temp;
+    // unpredictable
+  }
 EOR_INST:
+  temp = RD_C;
+  arm->general_regs[temp] = rn ^ shifter_operand;
+  if (IS_BIT_SET(OP_CODE, S_BIT)) {
+    if (temp == 15 && (arm->mode > 1)) {
+      arm->cpsr = arm->spsr[arm->mode - 2];
+    }
+    temp = arm->cpsr & 0x1FFFFFFF;
+    temp |= (arm->cpsr & 0x80000000); // n flag
+    temp |= ((arm->general_regs[temp] == 0) << 30);
+    temp |= (shifter_carry_out << 29);
+    arm->cpsr = temp;
+    // unpredictable
+  }
 SUB_INST:
   write_instruction_log(arm, "sub");
   goto END;
 RSB_INST:
 ADD_INST:
+  // if ConditionPassed(cond) then
+  // Rd = Rn + shifter_operand
+  // if S == 1 and Rd == R15 then
+  // if CurrentModeHasSPSR() then
+  // CPSR = SPSR
+  // else UNPREDICTABLE
+  // else if S == 1 then
+  // N Flag = Rd[31]
+  // Z Flag = if Rd == 0 then 1 else 0
+  // C Flag = CarryFrom(Rn + shifter_operand)
+  // V Flag = OverflowFrom(Rn + shifter_operand)
+
+  // TODO implement all;
+  temp = RD_C;
+  result = rn + shifter_operand;
+  arm->general_regs[temp] = result;
+
+  if (IS_BIT_SET(OP_CODE, S_BIT) && temp == 15) { // if rd is r15
+    if (arm->mode > 1) {                          // mode has spsr
+      arm->cpsr = arm->spsr[arm->mode - 2];
+    }
+    // unpredictable
+  } else if (IS_BIT_SET(OP_CODE, S_BIT)) {
+    temp = arm->cpsr & 0xFFFFFFF;
+    temp |= (result & 0x80000000); // n flag
+    temp |= ((arm->general_regs[temp] == 0) << 30);
+    temp |= (GET_BIT(result, 32) << 29);
+
+    if (IS_BIT_SET(rn, 31) && IS_BIT_SET(shifter_operand, 31) &&
+        !IS_BIT_SET(result, 31)) {
+
+      // overflow flag is set
+      temp |= 0x10000000;
+    } else if (!IS_BIT_SET(rn, 31) && (!IS_BIT_SET(shifter_operand, 31)) &&
+               IS_BIT_SET(result, 31)) {
+      // overflow flag is set
+      temp |= 0x10000000;
+    }
+    arm->cpsr = temp;
+  }
+
   write_instruction_log(arm, "add");
   goto END;
 ADC_INST:
 SBC_INST:
 RSC_INST:
 TST_INST:
+  // alu_out = Rn AND shifter_operand
+  // N Flag = alu_out[31]
+  // Z Flag = if alu_out == 0 then 1 else 0
+  // C Flag = shifter_carry_out
+  // V Flag = unaffected
+  result = rn & shifter_operand;
+  temp = arm->cpsr & 0x1FFFFFFF;
+  temp |= (result & 0x80000000); // n flag
+  temp |= ((result == 0) << 30);
+  temp |= (shifter_carry_out << 29);
+  arm->cpsr = temp;
+
 TEQ_INST:
+  result = rn ^ shifter_operand;
+  temp = arm->cpsr & 0x1FFFFFFF;
+  temp |= (result & 0x80000000); // n flag
+  temp |= ((result == 0) << 30);
+  temp |= (shifter_carry_out << 29);
+  arm->cpsr = temp;
 CMP_INST:
 CMN_INST:
 ORR_INST:
+
+  temp = RD_C;
+  arm->general_regs[temp] = rn | shifter_operand;
+  if (IS_BIT_SET(OP_CODE, S_BIT)) {
+    if (temp == 15 && (arm->mode > 1)) {
+      arm->cpsr = arm->spsr[arm->mode - 2];
+    }
+    temp = arm->cpsr & 0x1FFFFFFF;
+    temp |= (arm->cpsr & 0x80000000); // n flag
+    temp |= ((arm->general_regs[temp] == 0) << 30);
+    temp |= (shifter_carry_out << 29);
+    arm->cpsr = temp;
+    // unpredictable
+  }
 MOV_INST:
+  temp = RD_C;
+  arm->general_regs[temp] = shifter_operand;
+  if (IS_BIT_SET(OP_CODE, S_BIT)) {
+    if (temp == 15 && (arm->mode > 1)) {
+      arm->cpsr = arm->spsr[arm->mode - 2];
+    }
+    temp = arm->cpsr & 0x1FFFFFFF;
+    temp |= (arm->cpsr & 0x80000000); // n flag
+    temp |= ((arm->general_regs[temp] == 0) << 30);
+    temp |= (shifter_carry_out << 29);
+    arm->cpsr = temp;
+    // unpredictable
+  }
   write_instruction_log(arm, "mov");
   goto END;
 BIC_INST:
 MVN_INST:
+  temp = RD_C;
+  arm->general_regs[temp] = ~shifter_operand;
+  if (IS_BIT_SET(OP_CODE, S_BIT)) {
+    if (temp == 15 && (arm->mode > 1)) {
+      arm->cpsr = arm->spsr[arm->mode - 2];
+    }
+    temp = arm->cpsr & 0x1FFFFFFF;
+    temp |= (arm->cpsr & 0x80000000); // n flag
+    temp |= ((arm->general_regs[temp] == 0) << 30);
+    temp |= (shifter_carry_out << 29);
+    arm->cpsr = temp;
+    // unpredictable
+  }
 
 END:
   return 0;
