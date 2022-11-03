@@ -4,6 +4,7 @@
 // {DONE}
 // TODO CPSR = SPSR code is incorrect Check again {DONE}
 // TODO optimize overflow flag setting  {DONE}
+// TODO choose registers based on mode in instructions  !{IMPORTANT}
 #include "arm.h"
 #include "disassembler.h"
 #include "inst_decode.h"
@@ -192,12 +193,63 @@ MULTIPLY:
   write_instruction_log(arm, "multiply");
   goto END;
 LOAD_STORE_H_D_S:
+  temp = OP_CODE & LS_H_D_S_MASK;
+  if (temp == LS_H_D_S_REG_DECODE) {
+
+  } else if(temp == LS_H_D_S_IMM_DECODE) {
+
+  } else if (temp == LS_H_D_S_IMM_PR_DECODE) {
+
+  } else if (temp == LS_H_D_S_REG_PR_DECODE) {
+
+  } else if (temp == LS_H_D_S_REG_PO_DECODE) {
+
+  } else if (temp == LS_H_D_S_IMM_PO_DECODE) {
+
+  }
   write_instruction_log(arm, "load_store_h_d_s");
   goto END;
 LOAD_STORE_W_U:
+
+  temp = OP_CODE & LS_W_U_IMM_MASK;
+  if (temp == LS_W_U_IMM_DECODE) {
+
+  } else if (temp == LS_W_U_IMM_PR_DECODE) {
+
+  } else if (temp == LS_W_U_IMM_PO_DECODE) {
+
+  }
+
+  temp = OP_CODE & LS_W_U_REG_MASK;
+  if (temp == LS_W_U_REG_DECODE) {
+
+  } else if (temp == LS_W_U_REG_PR_DECODE) {
+
+  } else if (temp == LS_W_U_REG_PO_DECODE) {
+
+  }
+
+  temp = OP_CODE & LS_W_U_SCALED_MASK;
+  if (temp == LS_W_U_SCALED_REG_DECODE) {
+
+  } else if (temp == LS_W_U_SCALED_REG_PR_DECODE) {
+
+  } else if (temp == LS_W_U_SCALED_REG_PO_DECODE) {
+
+  }
   write_instruction_log(arm, "load_store_w_u");
   goto END;
 LOAD_STORE_M:
+  temp = OP_CODE & LS_M_MASK;
+  if (temp == LS_M_IA_DECODE) {
+
+  } else if (temp == LS_M_IB_DECODE) {
+
+  } else if (temp == LS_M_DA_DECODE) {
+
+  } else if (temp == LS_M_DB_DECODE) {
+
+  }
   write_instruction_log(arm, "load_store_m");
   goto END;
 DATA_PROCESS:
@@ -382,10 +434,12 @@ AND_INST:
   result = rn & shifter_operand;
   arm->general_regs[rd] = result;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(arm); }
+  goto END;
 EOR_INST:
   result = rn ^ shifter_operand;
   arm->general_regs[rd] = result;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(arm); }
+  goto END;
 SUB_INST:
 
   shifter_operand = (~shifter_operand) + 1; // two's compliment
@@ -402,6 +456,7 @@ RSB_INST:
   arm->general_regs[rd] = result;
 
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(arm); }
+  goto END;
 
 ADD_INST:
   result = rn + shifter_operand;
@@ -413,40 +468,48 @@ ADC_INST:
   result = rn + shifter_operand + GET_BIT(arm->cpsr, CF_BIT);
   arm->general_regs[rd] = result;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(arm); }
+  goto END;
 
 SBC_INST:
   shifter_operand = (~shifter_operand) + GET_BIT(arm->cpsr, CF_BIT);
   result = rn + shifter_operand;
   arm->general_regs[rd] = result;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(arm); }
+  goto END;
 RSC_INST:
   rn = (~rn) + GET_BIT(arm->cpsr, CF_BIT);
   result = shifter_operand + rn;
   arm->general_regs[rd] = result;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(arm); }
+  goto END;
 TST_INST:
   result = rn & shifter_operand;
   arm->general_regs[rd] = result;
   DATA_PROCESS_NZC(arm);
 
+  goto END;
 TEQ_INST:
   result = rn ^ shifter_operand;
   arm->general_regs[rd] = result;
   DATA_PROCESS_NZC(arm);
+  goto END;
 CMP_INST:
   shifter_operand = (~shifter_operand) + 1;
   result = rn + shifter_operand;
   arm->general_regs[rd] = result;
   DATA_PROCESS_NZCV(arm);
+  goto END;
 CMN_INST:
   result = rn + shifter_operand;
   arm->general_regs[rd] = result;
   DATA_PROCESS_NZCV(arm);
+  goto END;
 ORR_INST:
   result = rn | shifter_operand;
   arm->general_regs[rd] = result;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(arm); }
 
+  goto END;
 MOV_INST:
   arm->general_regs[rd] = shifter_operand;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) {
@@ -460,12 +523,12 @@ MOV_INST:
   write_instruction_log(arm, "mov");
   goto END;
 BIC_INST:
-  shifter_operand = ~shifter_operand;
-  result = rn & shifter_operand;
+  result = rn & (~shifter_operand);
   arm->general_regs[rd] = result;
   DATA_PROCESS_RD_EQ_R15(arm) else if(s_bit) {
     DATA_PROCESS_NZC(arm);
   }
+  goto END;
 MVN_INST:
   arm->general_regs[rd] = ~shifter_operand;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) {
