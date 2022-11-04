@@ -5,6 +5,7 @@
 // TODO CPSR = SPSR code is incorrect Check again {DONE}
 // TODO optimize overflow flag setting  {DONE}
 // TODO choose registers based on mode in instructions  !{IMPORTANT}
+// TODO choose cpsr based on mode in instructions   !{IMPORTANT}
 #include "arm.h"
 #include "disassembler.h"
 #include "inst_decode.h"
@@ -18,6 +19,12 @@
 #define CF_BIT 29
 #define VF_BIT 28
 #define R_15 15
+#define U_BIT (OP_CODE & 0x800000)
+
+#define RN_C ((OP_CODE >> 16) & 0xF)
+#define RD_C ((OP_CODE >> 12) & 0xF)
+#define RM_C (OP_CODE & 0xF)
+#define SHIFT_IMM ((OP_CODE >> 7) & 0x1F)
 
 #define DATA_PROCESS_NZCV(_arm)                                                \
   temp = _arm->cpsr & 0xFFFFFFF;                                               \
@@ -105,7 +112,10 @@ int arm_exec(Arm *arm) {
   uint32_t rs = 0;
   uint32_t rn = 0;
   uint32_t rd = 0;
+  int reg_count = 0;
   int s_bit = 0;
+  int cond_passed = 0;
+  uint32_t shift = 0;
 
   uint32_t shift_imm = 0;
   uint32_t rotate_imm = 0;
@@ -193,49 +203,206 @@ MULTIPLY:
   write_instruction_log(arm, "multiply");
   goto END;
 LOAD_STORE_H_D_S:
+#define immedH rotate_imm
+#define immedL shift_imm
+#define offset_8 shifter_operand
+  immedL = RM_C;
+  immedH = (OP_CODE & 0xF00) >> 8;
+  rn = arm->general_regs[RN_C];
+  rm = arm->general_regs[RM_C];
   temp = OP_CODE & LS_H_D_S_MASK;
+  offset_8 = ((immedH << 4) | immedL) & 0xFF;
   if (temp == LS_H_D_S_REG_DECODE) {
 
-  } else if(temp == LS_H_D_S_IMM_DECODE) {
+    if (U_BIT) {
+      ls_address = rn + rm;
+    } else {
+      ls_address = rn - rm;
+    }
+
+  } else if (temp == LS_H_D_S_IMM_DECODE) {
+    if (U_BIT) {
+      ls_address = rn + offset_8;
+    } else {
+      ls_address = rn - offset_8;
+    }
 
   } else if (temp == LS_H_D_S_IMM_PR_DECODE) {
+    if (U_BIT) {
+      ls_address = rn + offset_8;
+    } else {
+      ls_address = rn - offset_8;
+    }
+    if (cond_passed) {
+      arm->general_regs[RN_C] = ls_address;
+    }
 
   } else if (temp == LS_H_D_S_REG_PR_DECODE) {
+    if (U_BIT) {
+      ls_address = rn + rm;
+    } else {
+      ls_address = rn - rm;
+    }
+    if (cond_passed) {
+      arm->general_regs[RN_C] = ls_address;
+    }
 
   } else if (temp == LS_H_D_S_REG_PO_DECODE) {
-
+    ls_address = rn;
+    if (cond_passed) {
+      if (U_BIT) {
+        arm->general_regs[RN_C] = rn + rm;
+      } else {
+        arm->general_regs[RN_C] = rn - rm;
+      }
+    }
   } else if (temp == LS_H_D_S_IMM_PO_DECODE) {
-
+    ls_address = rn;
+    if (cond_passed) {
+      if (U_BIT) {
+        arm->general_regs[RN_C] = rn + offset_8;
+      } else {
+        arm->general_regs[RN_C] = rn - offset_8;
+      }
+    }
   }
   write_instruction_log(arm, "load_store_h_d_s");
   goto END;
 LOAD_STORE_W_U:
+#define OFFSET_12 (OP_CODE & 0xFFF)
 
+  reg_count = RN_C;
+  rn = arm->general_regs[reg_count];
+  shifter_operand = OFFSET_12;
   temp = OP_CODE & LS_W_U_IMM_MASK;
   if (temp == LS_W_U_IMM_DECODE) {
 
+    if (U_BIT) {
+      ls_address = rn + shifter_operand;
+    } else {
+      ls_address = rn - shifter_operand;
+    }
+
   } else if (temp == LS_W_U_IMM_PR_DECODE) {
+    if (U_BIT) {
+      ls_address = rn + shifter_operand;
+    } else {
+      ls_address = rn - shifter_operand;
+    }
+
+    if (cond_passed) {
+      arm->general_regs[reg_count] = ls_address;
+    }
 
   } else if (temp == LS_W_U_IMM_PO_DECODE) {
-
+    ls_address = rn;
+    if (cond_passed) {
+      if (U_BIT) {
+        arm->general_regs[reg_count] = rn + shifter_operand;
+      } else {
+        arm->general_regs[reg_count] = rn - shifter_operand;
+      }
+    }
   }
 
+  rm = arm->general_regs[RM_C];
   temp = OP_CODE & LS_W_U_REG_MASK;
   if (temp == LS_W_U_REG_DECODE) {
+    if (U_BIT) {
+      ls_address = rn + rm;
+    } else {
+      ls_address = rn - rm;
+    }
 
   } else if (temp == LS_W_U_REG_PR_DECODE) {
 
+    if (U_BIT) {
+      ls_address = rn + rm;
+    } else {
+      ls_address = rn - rm;
+    }
+
+    if (cond_passed) {
+      arm->general_regs[reg_count] = ls_address;
+    }
+
   } else if (temp == LS_W_U_REG_PO_DECODE) {
 
+    ls_address = rn;
+    if (cond_passed) {
+      if (U_BIT) {
+        arm->general_regs[reg_count] = rn + rm;
+      } else {
+        arm->general_regs[reg_count] = rn - rm;
+      }
+    }
   }
 
+  shift_imm = SHIFT_IMM;
+  shift = OP_CODE & 0x60;
   temp = OP_CODE & LS_W_U_SCALED_MASK;
+
+  switch (shift) {
+  case 0x00: // LSL
+    shifter_operand = rm << shift_imm;
+    break;
+  case 0x20: // LSR
+    if (shift_imm == 0) {
+      shifter_operand = 0;
+    } else {
+      shifter_operand = rm >> shift_imm;
+    }
+    break;
+
+  case 0x40: // ASR
+    if (shift_imm == 0) {
+      s_bit = GET_BIT(rm, 31);
+      if (s_bit)
+        shifter_operand = 0xFFFFFFFF;
+      else
+        shifter_operand = 0;
+    } else {
+
+      shifter_operand =
+          (rm >> shift_imm) | (s_bit * (0xFFFFFFFF << (32 - shift_imm)));
+    }
+    break;
+
+  default:
+    if (shift_imm == 0) {
+      s_bit = GET_BIT(arm->cpsr, CF_BIT);
+      shifter_operand = (s_bit << 31) | (rm >> 1);
+    } else {
+      shifter_operand = ROTATE_RIGHT32(rm, shift_imm);
+    }
+  }
   if (temp == LS_W_U_SCALED_REG_DECODE) {
 
+    if (U_BIT) {
+      ls_address = rn + shifter_operand;
+    } else {
+      ls_address = rn - shifter_operand;
+    }
+
   } else if (temp == LS_W_U_SCALED_REG_PR_DECODE) {
+    if (U_BIT) {
+      ls_address = rn + shifter_operand;
+    } else {
+      ls_address = rn - shifter_operand;
+    }
+
+    if (cond_passed) {
+      arm->general_regs[reg_count] = ls_address;
+    }
 
   } else if (temp == LS_W_U_SCALED_REG_PO_DECODE) {
-
+    if (cond_passed) {
+      if (U_BIT) {
+        arm->general_regs[reg_count] = rn + shifter_operand;
+      } else {
+        arm->general_regs[reg_count] = rn - shifter_operand;
+      }
+    }
   }
   write_instruction_log(arm, "load_store_w_u");
   goto END;
@@ -248,7 +415,6 @@ LOAD_STORE_M:
   } else if (temp == LS_M_DA_DECODE) {
 
   } else if (temp == LS_M_DB_DECODE) {
-
   }
   write_instruction_log(arm, "load_store_m");
   goto END;
@@ -258,11 +424,7 @@ DATA_PROCESS:
 
 #define ROTATE_IMM ((OP_CODE >> 8) & 0xF)
 #define IMM_8 (OP_CODE & 0xFF)
-#define SHIFT_IMM ((OP_CODE >> 7) & 0x1F)
 #define S_BIT (OP_CODE & 0x100000)
-#define RN_C ((OP_CODE >> 16) & 0xF)
-#define RD_C ((OP_CODE >> 12) & 0xF)
-#define RM_C (OP_CODE & 0xF)
 #define RS_C ((OP_CODE >> 8) & 0xF)
 #define INST_OPCODE ((OP_CODE >> 21) & 0xF)
 
@@ -525,9 +687,7 @@ MOV_INST:
 BIC_INST:
   result = rn & (~shifter_operand);
   arm->general_regs[rd] = result;
-  DATA_PROCESS_RD_EQ_R15(arm) else if(s_bit) {
-    DATA_PROCESS_NZC(arm);
-  }
+  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(arm); }
   goto END;
 MVN_INST:
   arm->general_regs[rd] = ~shifter_operand;
