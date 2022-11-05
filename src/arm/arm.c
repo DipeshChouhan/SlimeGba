@@ -5,7 +5,10 @@
 // TODO CPSR = SPSR code is incorrect Check again {DONE}
 // TODO optimize overflow flag setting  {DONE}
 // TODO choose registers based on mode in instructions  !{IMPORTANT}
-// TODO choose cpsr based on mode in instructions   !{IMPORTANT}
+// TODO remove checking condition passed !{IMPORTANT}
+//
+// TODO implement memory read and write change in all load and store
+// !{IMPORTANT}
 #include "arm.h"
 #include "disassembler.h"
 #include "inst_decode.h"
@@ -24,6 +27,7 @@
 #define RN_C ((OP_CODE >> 16) & 0xF)
 #define RD_C ((OP_CODE >> 12) & 0xF)
 #define RM_C (OP_CODE & 0xF)
+#define RS_C ((OP_CODE >> 8) & 0xF)
 #define SHIFT_IMM ((OP_CODE >> 7) & 0x1F)
 
 #define DATA_PROCESS_NZCV(_arm)                                                \
@@ -40,6 +44,11 @@
   temp |= (result & 0x80000000);                                               \
   temp |= ((_arm->general_regs[rd] == 0) << 30);                               \
   temp |= (shifter_carry_out << 29);
+
+#define MUL_NZ(_arm)                                                           \
+  temp = _arm->cpsr & 0x3FFFFFFF;                                              \
+  temp |= (result & 0x80000000);                                               \
+  temp |= ((_arm->general_regs[rd] == 0) << 30);
 
 #define DATA_PROCESS_RD_EQ_R15(_arm)                                           \
   if (s_bit && rd == R_15) {                                                   \
@@ -58,7 +67,10 @@
 // not considering _ror is zero
 #define ROTATE_RIGHT32(_op, _ror) ((_op >> _ror) | (_op << (32 - _ror)))
 
-#define SET_FLAGS_NZCV ()
+// TODO Implement this function
+uint32_t arm_read(uint32_t addr) { return 0; }
+
+void arm_write(uint32_t addr, uint32_t value);
 
 void init_arm(Arm *arm) {
 
@@ -125,12 +137,11 @@ int arm_exec(Arm *arm) {
       &&AND_INST, &&EOR_INST, &&SUB_INST, &&RSB_INST, &&ADD_INST, &&ADC_INST,
       &&SBC_INST, &&RSC_INST, &&TST_INST, &&TEQ_INST, &&CMP_INST, &&CMN_INST,
       &&ORR_INST, &&MOV_INST, &&BIC_INST, &&MVN_INST};
-  //                                 static void *mult_inst_table[] = {
-  //     &&DO_UND_MULTIPLY, &&DO_MUL,   &&DO_UND_MULTIPLY, &&DO_UND_MULTIPLY,
-  //     &&DO_UMULL,        &&DO_UMLAL, &&DO_SMULL,        &&DO_SMLAL,
-  //
-  //
-  // };
+
+  static void *mul_inst_table[] = {&&MUL_INST,   &&MLA_INST,   &&UNDEFINED,
+                                   &&UNDEFINED,  &&UMULL_INST, &&UMLAL_INST,
+                                   &&SMULL_INST, &&SMLAL_INST};
+
   static void *cond_field_table[] = {
       &&CHECK_EQ, &&CHECK_NE, &&CHECK_CS_HS, &&CHECK_CC_LO,
       &&CHECK_MI, &&CHECK_PL, &&CHECK_VS,    &&CHECK_VC,
@@ -162,8 +173,15 @@ CHECK_AL:
 DECODE:
   if ((OP_CODE & MULTIPLY_MASK) == MULTIPLY_DECODE) {
     // multiply instructions
-    goto MULTIPLY;
 
+    temp = (OP_CODE >> 21) & 0x7;
+    rd = RN_C;
+
+    rs = arm->general_regs[RS_C];
+    rm = arm->general_regs[RM_C];
+
+    write_instruction_log(arm, "multiply");
+    goto *mul_inst_table[temp];
   } else if ((OP_CODE & LOAD_STORE_H_D_S_MASK) == LOAD_STORE_H_D_S_DECODE) {
     // Load and store halfword or doubleword, and load signed byte instructions
     goto LOAD_STORE_H_D_S;
@@ -199,9 +217,6 @@ DECODE:
     goto UNDEFINED;
   }
 
-MULTIPLY:
-  write_instruction_log(arm, "multiply");
-  goto END;
 LOAD_STORE_H_D_S:
 #define immedH rotate_imm
 #define immedL shift_imm
@@ -293,8 +308,9 @@ LOAD_STORE_W_U:
     if (cond_passed) {
       arm->general_regs[reg_count] = ls_address;
     }
-
-  } else if (temp == LS_W_U_IMM_PO_DECODE) {
+  }
+  temp = OP_CODE & LS_W_U_IMM_PO_MASK;
+  if (temp == LS_W_U_IMM_PO_DECODE) {
     ls_address = rn;
     if (cond_passed) {
       if (U_BIT) {
@@ -325,8 +341,9 @@ LOAD_STORE_W_U:
     if (cond_passed) {
       arm->general_regs[reg_count] = ls_address;
     }
-
-  } else if (temp == LS_W_U_REG_PO_DECODE) {
+  }
+  temp = OP_CODE & LS_W_U_REG_PO_MASK;
+  if (temp == LS_W_U_REG_PO_DECODE) {
 
     ls_address = rn;
     if (cond_passed) {
@@ -394,8 +411,9 @@ LOAD_STORE_W_U:
     if (cond_passed) {
       arm->general_regs[reg_count] = ls_address;
     }
-
-  } else if (temp == LS_W_U_SCALED_REG_PO_DECODE) {
+  }
+  temp = OP_CODE & LS_W_U_SCALED_REG_PO_MASK;
+  if (temp == LS_W_U_SCALED_REG_PO_DECODE) {
     if (cond_passed) {
       if (U_BIT) {
         arm->general_regs[reg_count] = rn + shifter_operand;
@@ -425,7 +443,6 @@ DATA_PROCESS:
 #define ROTATE_IMM ((OP_CODE >> 8) & 0xF)
 #define IMM_8 (OP_CODE & 0xFF)
 #define S_BIT (OP_CODE & 0x100000)
-#define RS_C ((OP_CODE >> 8) & 0xF)
 #define INST_OPCODE ((OP_CODE >> 21) & 0xF)
 
   rn = arm->general_regs[RN_C];
@@ -697,6 +714,60 @@ MVN_INST:
     temp |= ((arm->general_regs[rd] == 0) << 30);
     temp |= (shifter_carry_out << 29);
   }
+
+LOAD_STORE_W_U_T_INSTS:
+
+  // Instructions can be LDRBT, LDRT, STRBT, STRT
+  temp = OP_CODE & 0x1700000;
+  rd = RD_C;
+  if (temp == LDRBT_DECODE) {
+    arm->general_regs[rd] = arm_read(ls_address);
+    arm->general_regs[RN_C] = ls_address;
+
+  } else if (temp == STRBT_DECODE) {
+    arm_write(ls_address, arm->general_regs[rd] & 0xFF);
+
+  } else if (temp == LDRT_DECODE) {
+
+    arm->general_regs[rd] = arm_read(ls_address);
+
+  } else if (temp == STRT_DECODE) {
+    arm_write(ls_address, arm->general_regs[rd]);
+  }
+
+LOAD_STORE_W_U_INSTS:
+
+  // Instructions can be LDR, LDRB, STR, STRB
+  temp = OP_CODE & 0x500000;
+  rd = RD_C;
+  if (temp == LDR_DECODE) {
+    result = arm_read(ls_address);
+    if (rd == 15) {
+      arm->general_regs[rd] = result & 0xFFFFFFFC;
+    } else {
+      arm->general_regs[rd] = result;
+    }
+
+  } else if (temp == STR_DECODE) {
+    arm_write(ls_address, arm->general_regs[rd]); // word write
+
+  } else if (temp == LDRB_DECODE) {
+    arm->general_regs[rd] = arm_read(ls_address); // unsigned byte memory access
+
+  } else if (temp == STRB_DECODE) {
+    arm_write(ls_address, arm->general_regs[rd] & 0xFF); // byte write
+  }
+
+MUL_INST:
+  arm->general_regs[rd] = rm * rs;
+MLA_INST:
+  rn = arm->general_regs[RD_C];
+  arm->general_regs[rd] = (rm * rs) + rn;
+UMULL_INST:
+  
+UMLAL_INST:
+SMULL_INST:
+SMLAL_INST:
 
 END:
   return 0;

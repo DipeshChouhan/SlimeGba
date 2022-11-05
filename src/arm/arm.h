@@ -41,6 +41,8 @@ typedef struct Arm {
     uint32_t spsr_abt;
     uint32_t spsr_und;
   };
+
+  uint8_t iwram[32 * 1024]; // internal work ram
 } Arm;
 
 void init_arm(Arm *arm);
