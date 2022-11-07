@@ -11,7 +11,7 @@
 // !{IMPORTANT}
 #include "arm.h"
 #include "disassembler.h"
-#include "inst_decode.h"
+#include "arm_inst_decode.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
