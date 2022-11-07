@@ -9,9 +9,13 @@
 //
 // TODO implement memory read and write change in all load and store
 // !{IMPORTANT}
+// TODO flag setting for multiply instructions
+// TODO Check singned multiply
+// TODO check msr instruction implementation !{IMPORTANT}
+// TODO set processor mode in msr instruction
 #include "arm.h"
-#include "disassembler.h"
 #include "arm_inst_decode.h"
+#include "disassembler.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,6 +33,8 @@
 #define RM_C (OP_CODE & 0xF)
 #define RS_C ((OP_CODE >> 8) & 0xF)
 #define SHIFT_IMM ((OP_CODE >> 7) & 0x1F)
+#define ROTATE_IMM ((OP_CODE >> 8) & 0xF)
+#define IMM_8 (OP_CODE & 0xFF)
 
 #define DATA_PROCESS_NZCV(_arm)                                                \
   temp = _arm->cpsr & 0xFFFFFFF;                                               \
@@ -269,7 +275,7 @@ LOAD_STORE_H_D_S:
   immedH = (OP_CODE & 0xF00) >> 8;
   reg_count = arm->mode * 16;
   rn = RN_C;
-  reg_p = arm->reg_table[reg_count+ rn];
+  reg_p = arm->reg_table[reg_count + rn];
   rm = *arm->reg_table[reg_count + RM_C];
   temp = OP_CODE & LS_H_D_S_MASK;
   offset_8 = ((immedH << 4) | immedL) & 0xFF;
@@ -570,7 +576,8 @@ DATA_PROCESS:
 
   temp = OP_CODE & SHIFTER_SHIFT_REG_MASK;
 
-  rs = (*arm->reg_table[reg_count + RS_C]) & 0xFF; // least significant byte of register rs
+  rs = (*arm->reg_table[reg_count + RS_C]) &
+       0xFF; // least significant byte of register rs
   if (temp == SHIFTER_LSL_REG_DECODE) {
 
     if (rs == 0) {
@@ -642,6 +649,83 @@ SWI:
   write_instruction_log(arm, "swi");
   goto END;
 CONTROL:
+#define operand shifter_operand
+  reg_count = arm->mode * 16;
+  if ((OP_CODE & BX_MASK) == BX_DECODE) {
+
+  } else if ((OP_CODE & MRS_MASK) == MRS_DECODE) {
+    reg_p = arm->reg_table[reg_count + RD_C];
+    if (IS_BIT_SET(OP_CODE, 22)) {
+      if (arm->mode > 1) {
+        *reg_p = arm->spsr[arm->mode - 2];
+      } else {
+        *reg_p = arm->cpsr;
+      }
+    }
+
+  } else if ((OP_CODE & MSR_IMM_MASK) == MSR_IMM_DECODE) {
+    rotate_imm = ROTATE_IMM * 2;
+    operand = ROTATE_RIGHT32(IMM_8, rotate_imm);
+
+  } else if ((OP_CODE & MSR_REG_MASK) == MSR_REG_DECODE) {
+    operand = *arm->reg_table[reg_count + RM_C];
+  } else {
+    // error undefined opcode
+  }
+
+  // bit mask constants for arm v4T
+#define unalloc_mask 0x0FFFFF00
+#define user_mask 0xF0000000
+#define private_mask 0x0000000F
+#define state_mask 0x00000020
+#define byte_mask temp
+#define mask shift_imm
+#define fieldmask_bit0 16
+#define fieldmask_bit1 17
+#define fieldmask_bit2 18
+#define fieldmask_bit3 19
+
+  if ((operand & unalloc_mask) == 0) {
+    byte_mask = IS_BIT_SET(OP_CODE, fieldmask_bit0) * 0x000000FF;
+    byte_mask |= IS_BIT_SET(OP_CODE, fieldmask_bit1) * 0x0000FF00;
+    byte_mask |= IS_BIT_SET(OP_CODE, fieldmask_bit2) * 0x00FF0000;
+    byte_mask |= IS_BIT_SET(OP_CODE, fieldmask_bit3) * 0xFF000000;
+  }
+
+  if (IS_BIT_SET(OP_CODE, 22)) {
+    if (arm->mode > 1) {
+      mask = byte_mask & (user_mask | private_mask | state_mask);
+      arm->spsr[arm->mode - 2] =
+          (arm->spsr[arm->mode - 2] & (~mask)) | (operand & mask);
+    }
+    // unpredictable
+
+  } else {
+    if (arm->mode > 0) {
+      // in privileged mode
+      if ((operand & state_mask) == 0) {
+
+        mask = byte_mask & (user_mask | private_mask);
+      }
+      // unpredictable
+    } else {
+      // user mode
+      mask = byte_mask & user_mask;
+    }
+    arm->cpsr = (arm->cpsr & (~mask)) | (operand & mask);
+  }
+
+#undef operand
+#undef unalloc_mask
+#undef user_mask
+#undef private_mask
+#undef state_mask
+#undef byte_mask
+#undef mask
+#undef fieldmask_bit0
+#undef fieldmask_bit1
+#undef fieldmask_bit2
+#undef fieldmask_bit3
   write_instruction_log(arm, "control");
   goto END;
 BRANCH_LINK:
@@ -815,10 +899,38 @@ MLA_INST:
   rn = *arm->reg_table[reg_count + RD_C];
   *reg_p = (rm * rs) + rn;
 UMULL_INST:
+  result = (rm * rs);
+  *reg_p = result >> 32;                      // rdhi
+  *arm->reg_table[reg_count + RD_C] = result; // rdlow
 
 UMLAL_INST:
+  // RdLo = (Rm * Rs)[31:0] + RdLo
+  // /* Unsigned multiplication */
+  // RdHi = (Rm * Rs)[63:32] + RdHi + CarryFrom((Rm * Rs)[31:0] + RdLo)
+  // if S == 1 then
+  // N Flag = RdHi[31]
+  // Z Flag = if (RdHi == 0) and (RdLo == 0) then 1 else 0
+  // C Flag = unaffected
+  // /* See "C and V flags" note */
+  // V Flag = unaffected
+  // /* See "C and V flags" note */
+  result = (rm * rs);
+  rn = reg_count + RD_C;
+  *reg_p = (result >> 32) + *reg_p;
+  result += *arm->reg_table[rn];
+  *arm->reg_table[rn] = result;
+  *reg_p += GET_BIT(result, 32);
 SMULL_INST:
+  result = (int32_t)rm * (int32_t)rs;
+  *reg_p = (result >> 32);
+  *arm->reg_table[reg_count + RD_C] = result;
 SMLAL_INST:
+  rn = reg_count + RD_C;
+  result = (int32_t)rm * (int32_t)rs;
+  *reg_p = result + *reg_p;
+  result += *arm->reg_table[rn];
+  *arm->reg_table[rn] = result;
+  *reg_p += GET_BIT(result, 32);
 
 END:
   return 0;

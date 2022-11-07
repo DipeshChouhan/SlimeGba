@@ -121,6 +121,20 @@
 #define STRBT_DECODE 0x600000
 #define STRT_DECODE 0x200000
 
+#define BX_MASK 0x6000F0
+#define BX_DECODE 0x200010
+
+#define MRS_MASK 0x200000
+#define MRS_DECODE 0x0
+
+#define MSR_IMM_MASK 0x2200000
+#define MSR_IMM_DECODE 0x2200000
+
+#define MSR_REG_MASK 0x2000F0
+#define MSR_REG_DECODE 0x200000
+
+
+
 // 1 for thumb state and 0 for arm state
 #define STATE_BIT(_reg) ((_reg & (1 << 5)) > 0)
 
