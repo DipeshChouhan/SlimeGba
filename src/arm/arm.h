@@ -5,11 +5,11 @@
 typedef enum {
   USR = 0, // user
   SYS,     // system
-  FIQ,     // fast interrupt
   IRQ,     // interrupt
   SVC,     // supervisor
   ABT,     // abort
   UND,     // undefined
+  FIQ,     // fast interrupt
 } Mode;
 
 typedef struct Arm {
@@ -30,6 +30,7 @@ typedef struct Arm {
   uint32_t irq_regs[2]; // banked registers from r13 - r14
   uint32_t und_regs[2]; // banked registers from r13 - r14
 
+  uint32_t *reg_table[116];
   // ARM-state program status registers
   uint32_t cpsr;
   // don't change order below

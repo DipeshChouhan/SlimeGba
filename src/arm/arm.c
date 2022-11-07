@@ -4,8 +4,8 @@
 // {DONE}
 // TODO CPSR = SPSR code is incorrect Check again {DONE}
 // TODO optimize overflow flag setting  {DONE}
-// TODO choose registers based on mode in instructions  !{IMPORTANT}
-// TODO remove checking condition passed !{IMPORTANT}
+// TODO choose registers based on mode in instructions  !{DONE - NOT TESTED}
+// TODO remove checking condition passed !{CHECK CORRECT IMPL}
 //
 // TODO implement memory read and write change in all load and store
 // !{IMPORTANT}
@@ -33,7 +33,7 @@
 #define DATA_PROCESS_NZCV(_arm)                                                \
   temp = _arm->cpsr & 0xFFFFFFF;                                               \
   temp |= (result & 0x80000000);                                               \
-  temp |= ((_arm->general_regs[rd] == 0) << 30);                               \
+  temp |= ((*reg_p == 0) << 30);                                               \
   temp |= ((result & 0x100000000) >> 3);                                       \
   temp |= ((((rn & 0x80000000) == (shifter_operand & 0x80000000)) &&           \
             ((rn & 0x80000000) != (result & 0x80000000)))                      \
@@ -42,13 +42,13 @@
 #define DATA_PROCESS_NZC(_arm)                                                 \
   temp = _arm->cpsr & 0x1FFFFFFF;                                              \
   temp |= (result & 0x80000000);                                               \
-  temp |= ((_arm->general_regs[rd] == 0) << 30);                               \
+  temp |= ((*reg_p == 0) << 30);                                               \
   temp |= (shifter_carry_out << 29);
 
 #define MUL_NZ(_arm)                                                           \
   temp = _arm->cpsr & 0x3FFFFFFF;                                              \
   temp |= (result & 0x80000000);                                               \
-  temp |= ((_arm->general_regs[rd] == 0) << 30);
+  temp |= ((*reg_p == 0) << 30);
 
 #define DATA_PROCESS_RD_EQ_R15(_arm)                                           \
   if (s_bit && rd == R_15) {                                                   \
@@ -71,6 +71,47 @@
 uint32_t arm_read(uint32_t addr) { return 0; }
 
 void arm_write(uint32_t addr, uint32_t value);
+
+void gen_reg_table(Arm *arm) {
+
+  for (int mode = 0; mode < 7; mode++) {
+    for (int reg = 0; reg < 16; reg++) {
+      if (mode < 2) {
+        // user mode and system mode
+        arm->reg_table[reg] = &arm->general_regs[reg];
+        continue;
+      }
+      if (mode == FIQ) {
+        // fiq mode
+        if (reg >= 8 && reg <= 14) {
+          arm->reg_table[reg] = &arm->fiq_regs[reg - 8];
+          continue;
+        }
+        arm->reg_table[reg] = &arm->general_regs[reg];
+        continue;
+      }
+
+      if (reg == 13 || reg == 14) {
+        if (mode == IRQ) {
+          arm->reg_table[reg] = &arm->irq_regs[reg - 13];
+
+        } else if (mode == SVC) {
+          arm->reg_table[reg] = &arm->svc_regs[reg - 13];
+
+        } else if (mode == ABT) {
+          arm->reg_table[reg] = &arm->abt_regs[reg - 13];
+
+        } else {
+          // und
+          arm->reg_table[reg] = &arm->und_regs[reg - 13];
+        }
+        continue;
+      }
+
+      arm->reg_table[reg] = &arm->general_regs[reg];
+    }
+  }
+}
 
 void init_arm(Arm *arm) {
 
@@ -97,6 +138,7 @@ void init_arm(Arm *arm) {
   arm->spsr_svc = 0;
   arm->spsr_und = 0;
   arm->state = 0; // default arm state
+  gen_reg_table(arm);
 
   // all global test goes here
 #ifdef DEBUG_ON
@@ -123,6 +165,7 @@ int arm_exec(Arm *arm) {
   uint32_t rm = 0;
   uint32_t rs = 0;
   uint32_t rn = 0;
+  uint32_t *reg_p = NULL;
   uint32_t rd = 0;
   int reg_count = 0;
   int s_bit = 0;
@@ -175,10 +218,11 @@ DECODE:
     // multiply instructions
 
     temp = (OP_CODE >> 21) & 0x7;
-    rd = RN_C;
+    reg_count = arm->mode * 16;
+    reg_p = arm->reg_table[reg_count + RN_C];
 
-    rs = arm->general_regs[RS_C];
-    rm = arm->general_regs[RM_C];
+    rs = *arm->reg_table[reg_count + RS_C];
+    rm = *arm->reg_table[reg_count + RM_C];
 
     write_instruction_log(arm, "multiply");
     goto *mul_inst_table[temp];
@@ -223,61 +267,63 @@ LOAD_STORE_H_D_S:
 #define offset_8 shifter_operand
   immedL = RM_C;
   immedH = (OP_CODE & 0xF00) >> 8;
-  rn = arm->general_regs[RN_C];
-  rm = arm->general_regs[RM_C];
+  reg_count = arm->mode * 16;
+  rn = RN_C;
+  reg_p = arm->reg_table[reg_count+ rn];
+  rm = *arm->reg_table[reg_count + RM_C];
   temp = OP_CODE & LS_H_D_S_MASK;
   offset_8 = ((immedH << 4) | immedL) & 0xFF;
   if (temp == LS_H_D_S_REG_DECODE) {
 
     if (U_BIT) {
-      ls_address = rn + rm;
+      ls_address = *reg_p + rm;
     } else {
-      ls_address = rn - rm;
+      ls_address = *reg_p - rm;
     }
 
   } else if (temp == LS_H_D_S_IMM_DECODE) {
     if (U_BIT) {
-      ls_address = rn + offset_8;
+      ls_address = *reg_p + offset_8;
     } else {
-      ls_address = rn - offset_8;
+      ls_address = *reg_p - offset_8;
     }
 
   } else if (temp == LS_H_D_S_IMM_PR_DECODE) {
     if (U_BIT) {
-      ls_address = rn + offset_8;
+      ls_address = *reg_p + offset_8;
     } else {
-      ls_address = rn - offset_8;
+      ls_address = *reg_p - offset_8;
     }
     if (cond_passed) {
-      arm->general_regs[RN_C] = ls_address;
+      *reg_p = ls_address;
     }
 
   } else if (temp == LS_H_D_S_REG_PR_DECODE) {
     if (U_BIT) {
-      ls_address = rn + rm;
+      ls_address = *reg_p + rm;
     } else {
-      ls_address = rn - rm;
+      ls_address = *reg_p - rm;
     }
     if (cond_passed) {
-      arm->general_regs[RN_C] = ls_address;
+      *reg_p = ls_address;
     }
 
   } else if (temp == LS_H_D_S_REG_PO_DECODE) {
-    ls_address = rn;
+    ls_address = *reg_p;
     if (cond_passed) {
       if (U_BIT) {
-        arm->general_regs[RN_C] = rn + rm;
+        *reg_p = *reg_p + rm;
       } else {
-        arm->general_regs[RN_C] = rn - rm;
+        *reg_p = *reg_p - rm;
       }
     }
   } else if (temp == LS_H_D_S_IMM_PO_DECODE) {
-    ls_address = rn;
+    ls_address = *reg_p;
     if (cond_passed) {
       if (U_BIT) {
-        arm->general_regs[RN_C] = rn + offset_8;
+        *reg_p = *reg_p + offset_8;
       } else {
-        arm->general_regs[RN_C] = rn - offset_8;
+        *reg_p = *reg_p - offset_8;
       }
     }
   }
@@ -286,23 +332,26 @@ LOAD_STORE_H_D_S:
 LOAD_STORE_W_U:
 #define OFFSET_12 (OP_CODE & 0xFFF)
 
-  reg_count = RN_C;
-  rn = arm->general_regs[reg_count];
+  rn = RN_C;
+  reg_count = arm->mode * 16;
+  // reg_count = RN_C;
+  // rn = arm->general_regs[reg_count];
+  reg_p = arm->reg_table[reg_count + rn];
   shifter_operand = OFFSET_12;
   temp = OP_CODE & LS_W_U_IMM_MASK;
   if (temp == LS_W_U_IMM_DECODE) {
 
     if (U_BIT) {
-      ls_address = rn + shifter_operand;
+      ls_address = *reg_p + shifter_operand;
     } else {
-      ls_address = rn - shifter_operand;
+      ls_address = *reg_p - shifter_operand;
     }
 
   } else if (temp == LS_W_U_IMM_PR_DECODE) {
     if (U_BIT) {
-      ls_address = rn + shifter_operand;
+      ls_address = *reg_p + shifter_operand;
     } else {
-      ls_address = rn - shifter_operand;
+      ls_address = *reg_p - shifter_operand;
     }
 
     if (cond_passed) {
@@ -311,46 +360,46 @@ LOAD_STORE_W_U:
   }
   temp = OP_CODE & LS_W_U_IMM_PO_MASK;
   if (temp == LS_W_U_IMM_PO_DECODE) {
-    ls_address = rn;
+    ls_address = *reg_p;
     if (cond_passed) {
       if (U_BIT) {
-        arm->general_regs[reg_count] = rn + shifter_operand;
+        *reg_p = *reg_p + shifter_operand;
       } else {
-        arm->general_regs[reg_count] = rn - shifter_operand;
+        *reg_p = *reg_p - shifter_operand;
       }
     }
   }
 
-  rm = arm->general_regs[RM_C];
+  rm = *arm->reg_table[reg_count + RM_C];
   temp = OP_CODE & LS_W_U_REG_MASK;
   if (temp == LS_W_U_REG_DECODE) {
     if (U_BIT) {
-      ls_address = rn + rm;
+      ls_address = *reg_p + rm;
     } else {
-      ls_address = rn - rm;
+      ls_address = *reg_p - rm;
     }
 
   } else if (temp == LS_W_U_REG_PR_DECODE) {
 
     if (U_BIT) {
-      ls_address = rn + rm;
+      ls_address = *reg_p + rm;
     } else {
-      ls_address = rn - rm;
+      ls_address = *reg_p - rm;
     }
 
     if (cond_passed) {
-      arm->general_regs[reg_count] = ls_address;
+      *reg_p = ls_address;
     }
   }
   temp = OP_CODE & LS_W_U_REG_PO_MASK;
   if (temp == LS_W_U_REG_PO_DECODE) {
 
-    ls_address = rn;
+    ls_address = *reg_p;
     if (cond_passed) {
       if (U_BIT) {
-        arm->general_regs[reg_count] = rn + rm;
+        *reg_p = *reg_p + rm;
       } else {
-        arm->general_regs[reg_count] = rn - rm;
+        *reg_p = *reg_p - rm;
       }
     }
   }
@@ -396,29 +445,29 @@ LOAD_STORE_W_U:
   if (temp == LS_W_U_SCALED_REG_DECODE) {
 
     if (U_BIT) {
-      ls_address = rn + shifter_operand;
+      ls_address = *reg_p + shifter_operand;
     } else {
-      ls_address = rn - shifter_operand;
+      ls_address = *reg_p - shifter_operand;
     }
 
   } else if (temp == LS_W_U_SCALED_REG_PR_DECODE) {
     if (U_BIT) {
-      ls_address = rn + shifter_operand;
+      ls_address = *reg_p + shifter_operand;
     } else {
-      ls_address = rn - shifter_operand;
+      ls_address = *reg_p - shifter_operand;
     }
 
     if (cond_passed) {
-      arm->general_regs[reg_count] = ls_address;
+      *reg_p = ls_address;
     }
   }
   temp = OP_CODE & LS_W_U_SCALED_REG_PO_MASK;
   if (temp == LS_W_U_SCALED_REG_PO_DECODE) {
     if (cond_passed) {
       if (U_BIT) {
-        arm->general_regs[reg_count] = rn + shifter_operand;
+        *reg_p = *reg_p + shifter_operand;
       } else {
-        arm->general_regs[reg_count] = rn - shifter_operand;
+        *reg_p = *reg_p - shifter_operand;
       }
     }
   }
@@ -444,9 +493,10 @@ DATA_PROCESS:
 #define IMM_8 (OP_CODE & 0xFF)
 #define S_BIT (OP_CODE & 0x100000)
 #define INST_OPCODE ((OP_CODE >> 21) & 0xF)
-
-  rn = arm->general_regs[RN_C];
+  reg_count = arm->mode * 16;
+  rn = *arm->reg_table[reg_count + RN_C];
   rd = RD_C;
+  reg_p = arm->reg_table[reg_count + rd];
   s_bit = S_BIT;
 
   if ((OP_CODE & SHIFTER_IMM_MASK) == SHIFTER_IMM_DECODE) {
@@ -464,7 +514,7 @@ DATA_PROCESS:
   }
 
   temp = OP_CODE & SHIFTER_REG_MASK;
-  rm = arm->general_regs[RM_C];
+  rm = *arm->reg_table[reg_count + RM_C];
   if (temp == SHIFTER_REG_DECODE) {
     shifter_operand = rm; // TODO - change to register
     shifter_carry_out = GET_BIT(arm->cpsr, CF_BIT);
@@ -519,8 +569,8 @@ DATA_PROCESS:
   }
 
   temp = OP_CODE & SHIFTER_SHIFT_REG_MASK;
-  rs = arm->general_regs[RS_C] & 0xFF; // least significant byte of register rs
 
+  rs = (*arm->reg_table[reg_count + RS_C]) & 0xFF; // least significant byte of register rs
   if (temp == SHIFTER_LSL_REG_DECODE) {
 
     if (rs == 0) {
@@ -611,19 +661,19 @@ UNCONDITIONAL:
 
 AND_INST:
   result = rn & shifter_operand;
-  arm->general_regs[rd] = result;
+  *reg_p = result;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(arm); }
   goto END;
 EOR_INST:
   result = rn ^ shifter_operand;
-  arm->general_regs[rd] = result;
+  *reg_p = result;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(arm); }
   goto END;
 SUB_INST:
 
   shifter_operand = (~shifter_operand) + 1; // two's compliment
   result = rn + shifter_operand;
-  arm->general_regs[rd] = result;
+  *reg_p = result;
 
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(arm); }
 
@@ -632,65 +682,65 @@ SUB_INST:
 RSB_INST:
   rn = (~rn) + 1;
   result = rn + shifter_operand;
-  arm->general_regs[rd] = result;
+  *reg_p = result;
 
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(arm); }
   goto END;
 
 ADD_INST:
   result = rn + shifter_operand;
-  arm->general_regs[rd] = result;
+  *reg_p = result;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(arm); }
   write_instruction_log(arm, "add");
   goto END;
 ADC_INST:
   result = rn + shifter_operand + GET_BIT(arm->cpsr, CF_BIT);
-  arm->general_regs[rd] = result;
+  *reg_p = result;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(arm); }
   goto END;
 
 SBC_INST:
   shifter_operand = (~shifter_operand) + GET_BIT(arm->cpsr, CF_BIT);
   result = rn + shifter_operand;
-  arm->general_regs[rd] = result;
+  *reg_p = result;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(arm); }
   goto END;
 RSC_INST:
   rn = (~rn) + GET_BIT(arm->cpsr, CF_BIT);
   result = shifter_operand + rn;
-  arm->general_regs[rd] = result;
+  *reg_p = result;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(arm); }
   goto END;
 TST_INST:
   result = rn & shifter_operand;
-  arm->general_regs[rd] = result;
+  *reg_p = result;
   DATA_PROCESS_NZC(arm);
 
   goto END;
 TEQ_INST:
   result = rn ^ shifter_operand;
-  arm->general_regs[rd] = result;
+  *reg_p = result;
   DATA_PROCESS_NZC(arm);
   goto END;
 CMP_INST:
   shifter_operand = (~shifter_operand) + 1;
   result = rn + shifter_operand;
-  arm->general_regs[rd] = result;
+  *reg_p = result;
   DATA_PROCESS_NZCV(arm);
   goto END;
 CMN_INST:
   result = rn + shifter_operand;
-  arm->general_regs[rd] = result;
+  *reg_p = result;
   DATA_PROCESS_NZCV(arm);
   goto END;
 ORR_INST:
   result = rn | shifter_operand;
-  arm->general_regs[rd] = result;
+  *reg_p = result;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(arm); }
 
   goto END;
 MOV_INST:
-  arm->general_regs[rd] = shifter_operand;
+  *reg_p = shifter_operand;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) {
 
     temp = arm->cpsr & 0x1FFFFFFF;
@@ -703,11 +753,11 @@ MOV_INST:
   goto END;
 BIC_INST:
   result = rn & (~shifter_operand);
-  arm->general_regs[rd] = result;
+  *reg_p = result;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(arm); }
   goto END;
 MVN_INST:
-  arm->general_regs[rd] = ~shifter_operand;
+  *reg_p = shifter_operand;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) {
     temp = arm->cpsr & 0x1FFFFFFF;
     temp |= (arm->general_regs[rd] & 0x80000000);
@@ -719,20 +769,20 @@ LOAD_STORE_W_U_T_INSTS:
 
   // Instructions can be LDRBT, LDRT, STRBT, STRT
   temp = OP_CODE & 0x1700000;
-  rd = RD_C;
+  reg_p = arm->reg_table[reg_count + RD_C];
   if (temp == LDRBT_DECODE) {
-    arm->general_regs[rd] = arm_read(ls_address);
-    arm->general_regs[RN_C] = ls_address;
+    *reg_p = arm_read(ls_address);
+    *arm->reg_table[reg_count + RN_C] = ls_address;
 
   } else if (temp == STRBT_DECODE) {
-    arm_write(ls_address, arm->general_regs[rd] & 0xFF);
+    arm_write(ls_address, (*reg_p) & 0xFF);
 
   } else if (temp == LDRT_DECODE) {
 
-    arm->general_regs[rd] = arm_read(ls_address);
+    *reg_p = arm_read(ls_address);
 
   } else if (temp == STRT_DECODE) {
-    arm_write(ls_address, arm->general_regs[rd]);
+    arm_write(ls_address, *reg_p);
   }
 
 LOAD_STORE_W_U_INSTS:
@@ -740,31 +790,32 @@ LOAD_STORE_W_U_INSTS:
   // Instructions can be LDR, LDRB, STR, STRB
   temp = OP_CODE & 0x500000;
   rd = RD_C;
+  reg_p = arm->reg_table[reg_count + rd];
   if (temp == LDR_DECODE) {
     result = arm_read(ls_address);
     if (rd == 15) {
-      arm->general_regs[rd] = result & 0xFFFFFFFC;
+      *reg_p = result & 0xFFFFFFFC;
     } else {
-      arm->general_regs[rd] = result;
+      *reg_p = result;
     }
 
   } else if (temp == STR_DECODE) {
-    arm_write(ls_address, arm->general_regs[rd]); // word write
+    arm_write(ls_address, *reg_p); // word write
 
   } else if (temp == LDRB_DECODE) {
-    arm->general_regs[rd] = arm_read(ls_address); // unsigned byte memory access
+    *reg_p = arm_read(ls_address); // unsigned byte memory access
 
   } else if (temp == STRB_DECODE) {
-    arm_write(ls_address, arm->general_regs[rd] & 0xFF); // byte write
+    arm_write(ls_address, (*reg_p) & 0xFF); // byte write
   }
 
 MUL_INST:
-  arm->general_regs[rd] = rm * rs;
+  *reg_p = rm * rs;
 MLA_INST:
-  rn = arm->general_regs[RD_C];
-  arm->general_regs[rd] = (rm * rs) + rn;
+  rn = *arm->reg_table[reg_count + RD_C];
+  *reg_p = (rm * rs) + rn;
 UMULL_INST:
-  
+
 UMLAL_INST:
 SMULL_INST:
 SMLAL_INST:
