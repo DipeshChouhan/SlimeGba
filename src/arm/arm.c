@@ -480,17 +480,55 @@ LOAD_STORE_W_U:
   write_instruction_log(arm, "load_store_w_u");
   goto END;
 LOAD_STORE_M:
+#define reg_list shift_imm
+#define set_bits rotate_imm
+#define start_address shifter_operand
+#define end_address ls_address
+  reg_list = OP_CODE & 0xFFFF;
+  set_bits = 0;
+  reg_count = arm->mode * 16;
+  reg_p = arm->reg_table[reg_count + RN_C];
+  // counting number of 1 bits
+  while(reg_list) {
+    set_bits += reg_list & 1;
+    reg_list >>= 1;
+  }
   temp = OP_CODE & LS_M_MASK;
   if (temp == LS_M_IA_DECODE) {
 
+    start_address = *reg_p;
+    end_address = *reg_p + (set_bits * 4) - 4;
+    if (cond_passed && IS_BIT_SET(OP_CODE, 21)) {
+      *reg_p = end_address + 4;
+    }
   } else if (temp == LS_M_IB_DECODE) {
 
+    start_address = *reg_p + 4;
+    end_address = *reg_p + (set_bits * 4);
+    if (cond_passed && IS_BIT_SET(OP_CODE, 21)) {
+      *reg_p = end_address;
+    }
+
   } else if (temp == LS_M_DA_DECODE) {
+    start_address = *reg_p - (set_bits * 4) + 4;
+    end_address = *reg_p;
+
+    if (cond_passed && IS_BIT_SET(OP_CODE, 21)) {
+      *reg_p = start_address - 4;
+    }
 
   } else if (temp == LS_M_DB_DECODE) {
+    start_address = *reg_p - (set_bits * 4);
+    end_address = *reg_p - 4;
+    if (cond_passed && IS_BIT_SET(OP_CODE, 21)) {
+      *reg_p = start_address;
+    }
   }
+
   write_instruction_log(arm, "load_store_m");
   goto END;
+#undef reg_list
+#undef set_bits
 DATA_PROCESS:
 
   // shifter operand processing
