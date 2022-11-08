@@ -5,7 +5,7 @@
 // TODO CPSR = SPSR code is incorrect Check again {DONE}
 // TODO optimize overflow flag setting  {DONE}
 // TODO choose registers based on mode in instructions  !{DONE - NOT TESTED}
-// TODO remove checking condition passed !{CHECK CORRECT IMPL}
+// TODO remove checking condition passed !{IMPORTANT}
 //
 // TODO implement memory read and write change in all load and store
 // !{IMPORTANT}
@@ -13,12 +13,15 @@
 // TODO Check singned multiply
 // TODO check msr instruction implementation !{IMPORTANT}
 // TODO set processor mode in msr instruction
+// TODO check when to switch between arm and thumb state in instructions
+// TODO implement B, BL correctly
 #include "arm.h"
 #include "arm_inst_decode.h"
 #include "disassembler.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 #define DEBUG_ON
 
 #define NF_BIT 31
@@ -529,6 +532,8 @@ LOAD_STORE_M:
   goto END;
 #undef reg_list
 #undef set_bits
+#undef start_address
+#undef end_address
 DATA_PROCESS:
 
   // shifter operand processing
@@ -690,6 +695,10 @@ CONTROL:
 #define operand shifter_operand
   reg_count = arm->mode * 16;
   if ((OP_CODE & BX_MASK) == BX_DECODE) {
+    rm = *arm->reg_table[reg_count + RM_C];
+    // T bit
+    arm->cpsr = SET_BIT(arm->cpsr, 5, (rm & 1));
+    arm->general_regs[15] = rm & 0xFFFFFFFE;
 
   } else if ((OP_CODE & MRS_MASK) == MRS_DECODE) {
     reg_p = arm->reg_table[reg_count + RD_C];
@@ -767,6 +776,14 @@ CONTROL:
   write_instruction_log(arm, "control");
   goto END;
 BRANCH_LINK:
+  
+  s_bit = OP_CODE & 0xFFFFFF;
+  s_bit |= IS_BIT_SET(s_bit, 23) * 0x3F000000;  // sign extend to 30 bits
+  s_bit = s_bit << 2;
+  if (IS_BIT_SET(OP_CODE, 24)) {
+    // LR = address of the instruction after the branch instruction
+  }
+  arm->general_regs[15] = arm->general_regs[15] + s_bit;
   write_instruction_log(arm, "branch_link");
   goto END;
 COPROCESSOR:
@@ -930,6 +947,77 @@ LOAD_STORE_W_U_INSTS:
   } else if (temp == STRB_DECODE) {
     arm_write(ls_address, (*reg_p) & 0xFF); // byte write
   }
+
+LOAD_STORE_M_INSTS:
+#define start_address shifter_operand
+#define end_address ls_address
+#define reg_list shift_imm
+#define i shifter_carry_out
+  reg_list = OP_CODE & 0xFFFF;
+  reg_count = arm->mode * 16;
+
+  if ((OP_CODE & LDM1_MASK) == LDM1_DECODE) {
+    for (i = 0; i < 15; i++) {
+      if (reg_list & 1) {
+        *arm->reg_table[reg_count + i] = arm_read(start_address);
+        start_address += 4;
+      }
+      reg_list >>= 1;
+    }
+
+    if (reg_list & 1) {
+      // check for pc
+      arm->general_regs[15] = arm_read(start_address) & 0xFFFFFFFC;
+      start_address += 4;
+    }
+    assert(end_address == start_address - 4);
+
+  } else if ((OP_CODE & LDM2_MASK) == LDM2_DECODE) {
+    for (i = 0; i < 15; i++) {
+      if (reg_list & 1)  {
+        arm->general_regs[i] = arm_read(start_address);
+        start_address += 4;
+      }
+      reg_list >>= 1;
+    }
+    assert(end_address == start_address - 4);
+    
+
+  } else if ((OP_CODE & LDM3_MASK) == LDM3_DECODE) {
+    for (i = 0; i < 15; i++) {
+      if (reg_list & 1) {
+        *arm->reg_table[reg_count + i] = arm_read(start_address);
+        start_address += 4;
+      }
+      reg_list >>= 1;
+    }
+    if (arm->mode > 1) {
+      arm->cpsr = arm->spsr[arm->mode - 2];
+    }
+    arm->general_regs[15] = arm_read(start_address);
+    start_address += 4;
+    assert(end_address == start_address - 4);
+  } else if ((OP_CODE & STM1_MASK) == STM1_DECODE) {
+    for (i = 0; i < 16; i++) {
+      if (reg_list & 1) {
+        arm_write(start_address, *arm->reg_table[reg_count + i]);
+        start_address += 4;
+      }
+      reg_list >>= 1;
+    }
+    assert(end_address == start_address - 4);
+  } else if ((OP_CODE & STM2_MASK) == STM2_DECODE) {
+    for (i = 0; i < 16; i++) {
+      if (reg_list & 1) {
+        arm_write(start_address, arm->general_regs[i]);
+        start_address += 4;
+      }
+      reg_list >>= 1;
+    }
+    assert(end_address == start_address - 4);
+
+  }
+
 
 MUL_INST:
   *reg_p = rm * rs;

@@ -133,6 +133,21 @@
 #define MSR_REG_MASK 0x2000F0
 #define MSR_REG_DECODE 0x200000
 
+#define LDM1_MASK 0x500000
+#define LDM1_DECODE 0x100000
+
+#define LDM2_MASK 0x708000
+#define LDM2_DECODE 0x500000
+
+#define LDM3_MASK 0x508000
+#define LDM3_DECODE 0x508000
+
+#define STM1_MASK 0x500000
+#define STM1_DECODE 0x0
+
+#define STM2_MASK 0x700000
+#define STM2_DECODE 0x400000
+
 
 
 // 1 for thumb state and 0 for arm state
