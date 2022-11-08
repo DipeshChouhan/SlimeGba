@@ -47,6 +47,7 @@ typedef struct Arm {
 } Arm;
 
 void init_arm(Arm *arm);
-// execute a single instruction and returns cycle count
+// execute a single arm mode instruction and returns cycle count
 int arm_exec(Arm *arm);
+int thumb_exec(Arm *arm);
 #endif /* ! */
