@@ -24,10 +24,6 @@
 #include <assert.h>
 #define DEBUG_ON
 
-#define NF_BIT 31
-#define ZF_BIT 30
-#define CF_BIT 29
-#define VF_BIT 28
 #define R_15 15
 #define U_BIT (OP_CODE & 0x800000)
 
@@ -70,7 +66,6 @@
 
 #define SET_BIT(_op, _bit, _to) ((_op & (~(1 << _bit))) | (_to << _bit))
 
-#define IS_BIT_SET(_op, _bit) ((_op & (1 << _bit)) == (1 << _bit))
 #define OP_CODE arm->data_bus
 
 // not considering _ror is zero
@@ -160,6 +155,15 @@ void init_arm(Arm *arm) {
   if (test_val != 0x3F0) {
 
     printf("ROTATE_RIGHT32 Failed #2\n");
+    exit(1);
+  }
+
+  if (!IS_BIT_SET(0xFF30, 10)) {
+    printf("IS_BIT_SET Failed #1\n");
+    exit(1);
+  }
+  if (!IS_BIT_SET(0x8800FF30, 31)) {
+    printf("IS_BIT_SET Failed #2\n");
     exit(1);
   }
 #endif

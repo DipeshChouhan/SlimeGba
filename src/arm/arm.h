@@ -46,6 +46,13 @@ typedef struct Arm {
   uint8_t iwram[32 * 1024]; // internal work ram
 } Arm;
 
+
+#define NF_BIT 31
+#define ZF_BIT 30
+#define CF_BIT 29
+#define VF_BIT 28
+#define IS_BIT_SET(_op, _bit) ((_op & (1 << _bit)) == (1 << _bit))
+
 void init_arm(Arm *arm);
 // execute a single arm mode instruction and returns cycle count
 int arm_exec(Arm *arm);
