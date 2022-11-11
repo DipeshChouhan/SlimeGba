@@ -165,11 +165,21 @@ SUB2:
   result = *reg_p - imm_value;
   *reg_p = result;
 LSL1:
+  if (imm_value == 0) {
+    *reg_p = rm;
+  } else {
+    *reg_p = rm << imm_value;
+  }
 CMP1:
   result = *reg_p - imm_value;
 MOV1:
   *reg_p = imm_value;
 LSR1:
+  if (imm_value == 0) {
+    *reg_p = 0;
+  } else {
+    *reg_p = rm >> imm_value;
+  }
 ASR1:
 
 AND:
@@ -179,12 +189,40 @@ EOR:
   *reg_p = (*reg_p) ^ rm;
   goto END;
 LSL2:
+  imm_value = rm & 0xFF;
+  if (imm_value == 0) {
+
+ } else if (imm_value < 32) {
+   *reg_p = *reg_p << imm_value;
+
+ } else if (imm_value == 32) {
+   *reg_p = 0;
+
+ } else {
+   *reg_p = 0;
+ }
 LSR2:
+
+  imm_value = rm & 0xFF;
+  if (imm_value == 0) {
+
+ } else if (imm_value < 32) {
+   *reg_p = *reg_p >> imm_value;
+
+ } else if (imm_value == 32) {
+   *reg_p = 0;
+
+ } else {
+   *reg_p = 0;
+ }
 ASR2:
 ADC:
   result = *reg_p + rm + IS_BIT_SET(arm->cpsr, CF_BIT);
   *reg_p = result;
 SBC:
+  result = (~rm) + IS_BIT_SET(arm->cpsr, CF_BIT);
+  result += *reg_p;
+  *reg_p = result;
 ROR:
 TST:
   result = *reg_p & rm;

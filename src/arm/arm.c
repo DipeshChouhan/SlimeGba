@@ -20,7 +20,7 @@
 #include "disassembler.h"
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
+#include <stdlib.h> 
 #include <assert.h>
 #define DEBUG_ON
 
@@ -69,7 +69,6 @@
 #define OP_CODE arm->data_bus
 
 // not considering _ror is zero
-#define ROTATE_RIGHT32(_op, _ror) ((_op >> _ror) | (_op << (32 - _ror)))
 
 // TODO Implement this function
 uint32_t arm_read(uint32_t addr) { return 0; }

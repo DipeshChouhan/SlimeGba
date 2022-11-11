@@ -52,6 +52,7 @@ typedef struct Arm {
 #define CF_BIT 29
 #define VF_BIT 28
 #define IS_BIT_SET(_op, _bit) ((_op & (1 << _bit)) == (1 << _bit))
+#define ROTATE_RIGHT32(_op, _ror) ((_op >> _ror) | (_op << (32 - _ror)))
 
 void init_arm(Arm *arm);
 // execute a single arm mode instruction and returns cycle count
