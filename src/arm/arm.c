@@ -11,6 +11,7 @@
 // !{IMPORTANT}
 // TODO flag setting for multiply instructions
 // TODO check flag setting for data processing instructions !{IMPORTANT}
+// TODO check overflow flag setting in subtraction !{MOST IMPORTANT}
 // TODO Check singned multiply
 // TODO check msr instruction implementation !{IMPORTANT}
 // TODO set processor mode in msr instruction
