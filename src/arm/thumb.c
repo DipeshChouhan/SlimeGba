@@ -1,4 +1,4 @@
-// TODO - Implement flag setting for data processing instructions
+// TODO - Implement flag setting for data processing instructions !{IMPORTANT}
 #include "arm.h"
 #include "thumb_inst_decode.h"
 #include <stdint.h>
@@ -156,13 +156,13 @@ ADD2:
   *reg_p = result;
   goto END;
 SUB3:
-  result = rn - rm;
+  result = rn + (~rm) + 1;
   *reg_p = result;
 SUB1:
-  result = rn - imm_value;
+  result = rn + (~imm_value) + 1;
   *reg_p = result;
 SUB2:
-  result = *reg_p - imm_value;
+  result = *reg_p + (~imm_value) + 1;
   *reg_p = result;
 LSL1:
   if (imm_value == 0) {
@@ -171,7 +171,7 @@ LSL1:
     *reg_p = rm << imm_value;
   }
 CMP1:
-  result = *reg_p - imm_value;
+  result = *reg_p + (~imm_value) + 1;
 MOV1:
   *reg_p = imm_value;
 LSR1:
@@ -181,6 +181,16 @@ LSR1:
     *reg_p = rm >> imm_value;
   }
 ASR1:
+  if (imm_value == 0) {
+    if (!IS_BIT_SET(rm, 31)) {
+      *reg_p = 0;
+    } else {
+      *reg_p = 0xFFFFFFFF;
+    }
+  } else {
+    *reg_p = (rm >> imm_value) |
+             (IS_BIT_SET(rm, 31) * (0xFFFFFFFF << (32 - imm_value)));
+  }
 
 AND:
   *reg_p = (*reg_p) & rm;
@@ -192,30 +202,44 @@ LSL2:
   imm_value = rm & 0xFF;
   if (imm_value == 0) {
 
- } else if (imm_value < 32) {
-   *reg_p = *reg_p << imm_value;
+  } else if (imm_value < 32) {
+    *reg_p = *reg_p << imm_value;
 
- } else if (imm_value == 32) {
-   *reg_p = 0;
+  } else if (imm_value == 32) {
+    *reg_p = 0;
 
- } else {
-   *reg_p = 0;
- }
+  } else {
+    *reg_p = 0;
+  }
 LSR2:
 
   imm_value = rm & 0xFF;
   if (imm_value == 0) {
 
- } else if (imm_value < 32) {
-   *reg_p = *reg_p >> imm_value;
+  } else if (imm_value < 32) {
+    *reg_p = *reg_p >> imm_value;
 
- } else if (imm_value == 32) {
-   *reg_p = 0;
+  } else if (imm_value == 32) {
+    *reg_p = 0;
 
- } else {
-   *reg_p = 0;
- }
+  } else {
+    *reg_p = 0;
+  }
 ASR2:
+  rm = rm & 0xFF;
+  if (rm == 0) {
+
+  } else if (rm < 32) {
+
+    *reg_p = (*reg_p >> rm) |
+             (IS_BIT_SET(*reg_p, 31) * (0xFFFFFFFF << (32 - rm)));
+  } else {
+    if (IS_BIT_SET(*reg_p, 31)) {
+      *reg_p = 0;
+    } else {
+      *reg_p = 0xFFFFFFFF;
+    }
+  }
 ADC:
   result = *reg_p + rm + IS_BIT_SET(arm->cpsr, CF_BIT);
   *reg_p = result;
@@ -224,13 +248,21 @@ SBC:
   result += *reg_p;
   *reg_p = result;
 ROR:
+  if ((rm & 0xFF) == 0) {
+  
+  } else if ((rm & 0xF) == 0) {
+
+  } else {
+    rm = rm & 0xF;
+    *reg_p = ROTATE_RIGHT32(*reg_p, rm);
+  }
 TST:
   result = *reg_p & rm;
 NEG:
   result = 0 - rm;
   *reg_p = result;
 CMP2:
-  result = *reg_p - rm;
+  result = *reg_p + (~rm) + 1;
 CMN:
   result = *reg_p + rm;
 ORR:
@@ -251,12 +283,13 @@ ADD7:
   *reg_p = *reg_p + (imm_value << 2);
   goto END;
 SUB4:
-  *reg_p = *reg_p - (imm_value << 2);
+  imm_value <<= 2;
+  *reg_p = *reg_p + (~imm_value) + 1;
 ADD4:
   *reg_p = *reg_p + rm;
   goto END;
 CMP3:
-  result = *reg_p - rm;
+  result = *reg_p + (~rm) + 1;
 MOV3:
   *reg_p = rm;
 CPY:
