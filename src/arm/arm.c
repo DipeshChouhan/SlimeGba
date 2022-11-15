@@ -20,14 +20,15 @@
 #include "arm.h"
 #include "arm_inst_decode.h"
 #include "disassembler.h"
+#include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h> 
-#include <assert.h>
+#include <stdlib.h>
 #define DEBUG_ON
 
 #define R_15 15
 #define U_BIT (OP_CODE & 0x800000)
+#define S_BIT (OP_CODE & 0x100000)
 
 #define RN_C ((OP_CODE >> 16) & 0xF)
 #define RD_C ((OP_CODE >> 12) & 0xF)
@@ -54,8 +55,13 @@
 
 #define MUL_NZ(_arm)                                                           \
   temp = _arm->cpsr & 0x3FFFFFFF;                                              \
-  temp |= (result & 0x80000000);                                               \
+  temp |= (*reg_p & 0x80000000);                                               \
   temp |= ((*reg_p == 0) << 30);
+
+#define USMULL_NZ(_arm)                                                        \
+  temp = _arm->cpsr & 0x3FFFFFFF;                                              \
+  temp |= (*reg_p & 0x80000000);                                               \
+  temp |= ((*reg_p == 0) && ((result & 0xFFFFFFFF) == 0) << 30);
 
 #define DATA_PROCESS_RD_EQ_R15(_arm)                                           \
   if (s_bit && rd == R_15) {                                                   \
@@ -228,6 +234,7 @@ CHECK_LE:
 CHECK_AL:
 
 DECODE:
+
   if ((OP_CODE & MULTIPLY_MASK) == MULTIPLY_DECODE) {
     // multiply instructions
 
@@ -237,6 +244,7 @@ DECODE:
 
     rs = *arm->reg_table[reg_count + RS_C];
     rm = *arm->reg_table[reg_count + RM_C];
+    s_bit = S_BIT;
 
     write_instruction_log(arm, "multiply");
     goto *mul_inst_table[temp];
@@ -497,7 +505,7 @@ LOAD_STORE_M:
   reg_count = arm->mode * 16;
   reg_p = arm->reg_table[reg_count + RN_C];
   // counting number of 1 bits
-  while(reg_list) {
+  while (reg_list) {
     set_bits += reg_list & 1;
     reg_list >>= 1;
   }
@@ -545,7 +553,6 @@ DATA_PROCESS:
 
 #define ROTATE_IMM ((OP_CODE >> 8) & 0xF)
 #define IMM_8 (OP_CODE & 0xFF)
-#define S_BIT (OP_CODE & 0x100000)
 #define INST_OPCODE ((OP_CODE >> 21) & 0xF)
   reg_count = arm->mode * 16;
   rn = *arm->reg_table[reg_count + RN_C];
@@ -781,9 +788,9 @@ CONTROL:
   write_instruction_log(arm, "control");
   goto END;
 BRANCH_LINK:
-  
+
   s_bit = OP_CODE & 0xFFFFFF;
-  s_bit |= IS_BIT_SET(s_bit, 23) * 0x3F000000;  // sign extend to 30 bits
+  s_bit |= IS_BIT_SET(s_bit, 23) * 0x3F000000; // sign extend to 30 bits
   s_bit = s_bit << 2;
   if (IS_BIT_SET(OP_CODE, 24)) {
     // LR = address of the instruction after the branch instruction
@@ -979,14 +986,13 @@ LOAD_STORE_M_INSTS:
 
   } else if ((OP_CODE & LDM2_MASK) == LDM2_DECODE) {
     for (i = 0; i < 15; i++) {
-      if (reg_list & 1)  {
+      if (reg_list & 1) {
         arm->general_regs[i] = arm_read(start_address);
         start_address += 4;
       }
       reg_list >>= 1;
     }
     assert(end_address == start_address - 4);
-    
 
   } else if ((OP_CODE & LDM3_MASK) == LDM3_DECODE) {
     for (i = 0; i < 15; i++) {
@@ -1020,19 +1026,26 @@ LOAD_STORE_M_INSTS:
       reg_list >>= 1;
     }
     assert(end_address == start_address - 4);
-
   }
-
 
 MUL_INST:
   *reg_p = rm * rs;
+  if (s_bit) {
+    MUL_NZ(arm);
+  }
 MLA_INST:
   rn = *arm->reg_table[reg_count + RD_C];
   *reg_p = (rm * rs) + rn;
+  if (s_bit) {
+    MUL_NZ(arm);
+  }
 UMULL_INST:
   result = (rm * rs);
   *reg_p = result >> 32;                      // rdhi
   *arm->reg_table[reg_count + RD_C] = result; // rdlow
+  if (s_bit) {
+    USMULL_NZ(arm);
+  }
 
 UMLAL_INST:
   // RdLo = (Rm * Rs)[31:0] + RdLo
@@ -1051,10 +1064,16 @@ UMLAL_INST:
   result += *arm->reg_table[rn];
   *arm->reg_table[rn] = result;
   *reg_p += GET_BIT(result, 32);
+  if (s_bit) {
+    USMULL_NZ(arm);
+  }
 SMULL_INST:
   result = (int32_t)rm * (int32_t)rs;
   *reg_p = (result >> 32);
   *arm->reg_table[reg_count + RD_C] = result;
+  if (s_bit) {
+    USMULL_NZ(arm);
+  }
 SMLAL_INST:
   rn = reg_count + RD_C;
   result = (int32_t)rm * (int32_t)rs;
@@ -1062,6 +1081,9 @@ SMLAL_INST:
   result += *arm->reg_table[rn];
   *arm->reg_table[rn] = result;
   *reg_p += GET_BIT(result, 32);
+  if (s_bit) {
+    USMULL_NZ(arm);
+  }
 
 END:
   return 0;
