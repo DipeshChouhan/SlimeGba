@@ -18,6 +18,7 @@
 // TODO check when to switch between arm and thumb state in instructions
 // TODO implement B, BL correctly
 // TODO check fetch implementation ![IMPORTANT]
+// TODO check condition field implementation !{IMPORTANT}
 #include "arm.h"
 #include "arm_inst_decode.h"
 #include "disassembler.h"
@@ -231,20 +232,80 @@ int arm_exec(Arm *arm) {
 
 // check for conditions and set execute_instruction to 1
 CHECK_EQ:
+  if (IS_BIT_SET(OP_CODE, ZF_BIT)) {
+    goto DECODE;
+  }
+  goto END;
 CHECK_NE:
+  if (IS_BIT_SET(OP_CODE, ZF_BIT)) {
+    goto END;
+  }
+  goto DECODE;
 CHECK_CS_HS:
+  if (IS_BIT_SET(OP_CODE, CF_BIT)) {
+    goto DECODE;
+  }
+  goto END;
 CHECK_CC_LO:
+  if (IS_BIT_SET(OP_CODE, CF_BIT)) {
+    goto END;
+  }
+  goto DECODE;
 CHECK_MI:
+  if (IS_BIT_SET(OP_CODE, NF_BIT)) {
+    goto DECODE;
+  }
+  goto END;
 CHECK_PL:
+  if (IS_BIT_SET(OP_CODE, NF_BIT)) {
+    goto END;
+  }
+  goto DECODE;
 CHECK_VS:
+  if (IS_BIT_SET(OP_CODE, VF_BIT)) {
+    goto DECODE;
+  }
+  goto END;
 CHECK_VC:
+  if (IS_BIT_SET(OP_CODE, VF_BIT)) {
+    goto END;
+  }
+  goto DECODE;
 CHECK_HI:
+  // c set and z clear
+  if ((OP_CODE & 0x60000000) == 0x20000000) {
+    goto DECODE;
+  }
+  goto END;
 CHECK_LS:
+  if ((IS_BIT_SET(OP_CODE, CF_BIT) == 0) || IS_BIT_SET(OP_CODE, ZF_BIT)) {
+    goto DECODE;
+  }
+  goto END;
 CHECK_GE:
+  if (GET_BIT(OP_CODE, NF_BIT) == GET_BIT(OP_CODE, VF_BIT)) {
+    goto DECODE;
+  }
+  goto END;
 CHECK_LT:
+  if (GET_BIT(OP_CODE, NF_BIT) != GET_BIT(OP_CODE, VF_BIT)) {
+    goto DECODE;
+  }
+  goto END;
 CHECK_GT:
+  if ((IS_BIT_SET(OP_CODE, ZF_BIT) == 0) &&
+      (GET_BIT(OP_CODE, NF_BIT) == GET_BIT(OP_CODE, VF_BIT))) {
+    goto DECODE;
+  }
+  goto END;
 CHECK_LE:
+  if (IS_BIT_SET(OP_CODE, ZF_BIT) ||
+      (GET_BIT(OP_CODE, NF_BIT) != GET_BIT(OP_CODE, VF_BIT))) {
+    goto DECODE;
+  }
+  goto END;
 CHECK_AL:
+  // alway conditional
 
 DECODE:
 
