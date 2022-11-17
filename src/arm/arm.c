@@ -19,6 +19,7 @@
 // TODO implement B, BL correctly
 // TODO check fetch implementation ![IMPORTANT]
 // TODO check condition field implementation !{IMPORTANT}
+// TODO implement miscellaneous loads and store instructions  !{DONE - NOT TESTED}
 #include "arm.h"
 #include "arm_inst_decode.h"
 #include "disassembler.h"
@@ -415,8 +416,10 @@ LOAD_STORE_H_D_S:
       *reg_p = *reg_p - offset_8;
     }
   }
+
+  
   write_instruction_log(arm, "load_store_h_d_s");
-  goto END;
+  goto LOAD_STORE_H_D_S_INSTS;
 LOAD_STORE_W_U:
 #define OFFSET_12 (OP_CODE & 0xFFF)
 
@@ -971,6 +974,29 @@ MVN_INST:
     temp |= (shifter_carry_out << 29);
   }
 
+LOAD_STORE_H_D_S_INSTS:
+
+  temp = OP_CODE & LS_H_D_S_INST_MASK;
+  reg_count = (arm->mode * 16) + RD_C;
+  if (temp == LDRH_DECODE) {
+
+    *arm->reg_table[reg_count] = arm_read(ls_address) & 0xFFFF;
+
+  } else if (temp == LDRSB_DECODE) {
+    shifter_operand = arm_read(ls_address) & 0xFF;
+    shifter_operand = shifter_operand & (IS_BIT_SET(shifter_operand, 7) * 0xFFFFFFFF);
+    *arm->reg_table[reg_count] = shifter_operand;
+
+  } else if (temp == LDRSH_DECODE) {
+    shifter_operand = arm_read(ls_address) & 0xFFFF;
+    shifter_operand = shifter_operand & (IS_BIT_SET(shifter_operand, 15) * 0xFFFFFFFF);
+    *arm->reg_table[reg_count] = shifter_operand;
+    
+  } else if (temp == STRH_DECODE) {
+    // TODO implement it
+  }
+  goto END;
+
 LOAD_STORE_W_U_T_INSTS:
 
   // Instructions can be LDRBT, LDRT, STRBT, STRT
@@ -1091,12 +1117,14 @@ MUL_INST:
   if (s_bit) {
     MUL_NZ(arm);
   }
+  goto END;
 MLA_INST:
   rn = *arm->reg_table[reg_count + RD_C];
   *reg_p = (rm * rs) + rn;
   if (s_bit) {
     MUL_NZ(arm);
   }
+  goto END;
 UMULL_INST:
   result = (rm * rs);
   *reg_p = result >> 32;                      // rdhi
@@ -1104,6 +1132,7 @@ UMULL_INST:
   if (s_bit) {
     USMULL_NZ(arm);
   }
+  goto END;
 
 UMLAL_INST:
   // RdLo = (Rm * Rs)[31:0] + RdLo
@@ -1125,6 +1154,7 @@ UMLAL_INST:
   if (s_bit) {
     USMULL_NZ(arm);
   }
+  goto END;
 SMULL_INST:
   result = (int32_t)rm * (int32_t)rs;
   *reg_p = (result >> 32);
@@ -1132,6 +1162,7 @@ SMULL_INST:
   if (s_bit) {
     USMULL_NZ(arm);
   }
+  goto END;
 SMLAL_INST:
   rn = reg_count + RD_C;
   result = (int32_t)rm * (int32_t)rs;
