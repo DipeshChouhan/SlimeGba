@@ -17,6 +17,7 @@ typedef struct Arm {
   int state; // 1 for thumb and 0 for arm state
   Mode mode; // operation mode
 
+  uint32_t curr_instruction;
   int shifter_carry_out; // internal
   uint32_t data_bus;     // 32 bit data bus
 

@@ -14,9 +14,10 @@
 // TODO check overflow flag setting in subtraction !{MOST IMPORTANT}
 // TODO Check singned multiply
 // TODO check msr instruction implementation !{IMPORTANT}
-// TODO set processor mode in msr instruction
+// TODO set processor mode in msr instruction !{IMPORTANT}
 // TODO check when to switch between arm and thumb state in instructions
 // TODO implement B, BL correctly
+// TODO check fetch implementation ![IMPORTANT]
 #include "arm.h"
 #include "arm_inst_decode.h"
 #include "disassembler.h"
@@ -64,9 +65,12 @@
   temp |= ((*reg_p == 0) && ((result & 0xFFFFFFFF) == 0) << 30);
 
 #define DATA_PROCESS_RD_EQ_R15(_arm)                                           \
-  if (s_bit && rd == R_15) {                                                   \
-    if (_arm->mode > 1) {                                                      \
-      _arm->cpsr = _arm->spsr[_arm->mode - 2];                                 \
+  if (s_bit) {                                                                 \
+    if (rd == R_15) {                                                          \
+      if (_arm->mode > 1) {                                                    \
+        _arm->cpsr = _arm->spsr[_arm->mode - 2];                               \
+      }                                                                        \
+      arm->curr_instruction = arm->general_regs[R_15];                         \
     }                                                                          \
   }
 
@@ -213,8 +217,14 @@ int arm_exec(Arm *arm) {
       &&CHECK_MI, &&CHECK_PL, &&CHECK_VS,    &&CHECK_VC,
       &&CHECK_HI, &&CHECK_LS, &&CHECK_GE,    &&CHECK_LT,
       &&CHECK_GT, &&CHECK_LE, &&CHECK_AL,    &&UNCONDITIONAL};
-  // fetch() opcode in data bus
-  // do decode
+
+  // fetch
+  arm->data_bus = arm_read(arm->curr_instruction);
+  arm->general_regs[15] = arm->curr_instruction + 8; // pc contains + 8
+  arm->curr_instruction += 4;
+
+  // ---
+
   // goto DECODE;
 
   goto *cond_field_table[OP_CODE >> 28];
@@ -772,6 +782,7 @@ CONTROL:
   goto END;
 BRANCH_LINK:
 
+  // TODO make sure sign extend is correct
   s_bit = OP_CODE & 0xFFFFFF;
   s_bit |= IS_BIT_SET(s_bit, 23) * 0x3F000000; // sign extend to 30 bits
   s_bit = s_bit << 2;
@@ -891,7 +902,7 @@ BIC_INST:
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(arm); }
   goto END;
 MVN_INST:
-  *reg_p = shifter_operand;
+  *reg_p = ~shifter_operand;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) {
     temp = arm->cpsr & 0x1FFFFFFF;
     temp |= (arm->general_regs[rd] & 0x80000000);
@@ -927,8 +938,9 @@ LOAD_STORE_W_U_INSTS:
   reg_p = arm->reg_table[reg_count + rd];
   if (temp == LDR_DECODE) {
     result = arm_read(ls_address);
-    if (rd == 15) {
+    if (rd == R_15) {
       *reg_p = result & 0xFFFFFFFC;
+      arm->curr_instruction = *reg_p;
     } else {
       *reg_p = result;
     }
@@ -962,7 +974,8 @@ LOAD_STORE_M_INSTS:
 
     if (reg_list & 1) {
       // check for pc
-      arm->general_regs[15] = arm_read(start_address) & 0xFFFFFFFC;
+      arm->general_regs[R_15] = arm_read(start_address) & 0xFFFFFFFC;
+      arm->curr_instruction = arm->general_regs[R_15];
       start_address += 4;
     }
     assert(end_address == start_address - 4);
@@ -989,6 +1002,7 @@ LOAD_STORE_M_INSTS:
       arm->cpsr = arm->spsr[arm->mode - 2];
     }
     arm->general_regs[15] = arm_read(start_address);
+    arm->curr_instruction = arm->general_regs[15];
     start_address += 4;
     assert(end_address == start_address - 4);
   } else if ((OP_CODE & STM1_MASK) == STM1_DECODE) {
