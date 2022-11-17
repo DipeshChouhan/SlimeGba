@@ -5,7 +5,7 @@
 // TODO CPSR = SPSR code is incorrect Check again {DONE}
 // TODO optimize overflow flag setting  {DONE}
 // TODO choose registers based on mode in instructions  !{DONE - NOT TESTED}
-// TODO remove checking condition passed !{IMPORTANT}
+// TODO remove checking condition passed !{DONE}
 //
 // TODO implement memory read and write change in all load and store
 // !{IMPORTANT}
@@ -173,6 +173,10 @@ void init_arm(Arm *arm) {
     printf("IS_BIT_SET Failed #2\n");
     exit(1);
   }
+  if (!IS_BIT_SET(0x0, 31)) {
+    printf("IS_BIT_SET Failed #2\n");
+    exit(1);
+  }
 #endif
 }
 
@@ -189,7 +193,6 @@ int arm_exec(Arm *arm) {
   uint32_t rd = 0;
   int reg_count = 0;
   int s_bit = 0;
-  int cond_passed = 0;
   uint32_t shift = 0;
 
   uint32_t shift_imm = 0;
@@ -316,9 +319,7 @@ LOAD_STORE_H_D_S:
     } else {
       ls_address = *reg_p - offset_8;
     }
-    if (cond_passed) {
-      *reg_p = ls_address;
-    }
+    *reg_p = ls_address;
 
   } else if (temp == LS_H_D_S_REG_PR_DECODE) {
     if (U_BIT) {
@@ -326,27 +327,21 @@ LOAD_STORE_H_D_S:
     } else {
       ls_address = *reg_p - rm;
     }
-    if (cond_passed) {
-      *reg_p = ls_address;
-    }
+    *reg_p = ls_address;
 
   } else if (temp == LS_H_D_S_REG_PO_DECODE) {
     ls_address = *reg_p;
-    if (cond_passed) {
-      if (U_BIT) {
-        *reg_p = *reg_p + rm;
-      } else {
-        *reg_p = *reg_p - rm;
-      }
+    if (U_BIT) {
+      *reg_p = *reg_p + rm;
+    } else {
+      *reg_p = *reg_p - rm;
     }
   } else if (temp == LS_H_D_S_IMM_PO_DECODE) {
     ls_address = *reg_p;
-    if (cond_passed) {
-      if (U_BIT) {
-        *reg_p = *reg_p + offset_8;
-      } else {
-        *reg_p = *reg_p - offset_8;
-      }
+    if (U_BIT) {
+      *reg_p = *reg_p + offset_8;
+    } else {
+      *reg_p = *reg_p - offset_8;
     }
   }
   write_instruction_log(arm, "load_store_h_d_s");
@@ -376,19 +371,15 @@ LOAD_STORE_W_U:
       ls_address = *reg_p - shifter_operand;
     }
 
-    if (cond_passed) {
-      arm->general_regs[reg_count] = ls_address;
-    }
+    arm->general_regs[reg_count] = ls_address;
   }
   temp = OP_CODE & LS_W_U_IMM_PO_MASK;
   if (temp == LS_W_U_IMM_PO_DECODE) {
     ls_address = *reg_p;
-    if (cond_passed) {
-      if (U_BIT) {
-        *reg_p = *reg_p + shifter_operand;
-      } else {
-        *reg_p = *reg_p - shifter_operand;
-      }
+    if (U_BIT) {
+      *reg_p = *reg_p + shifter_operand;
+    } else {
+      *reg_p = *reg_p - shifter_operand;
     }
   }
 
@@ -409,20 +400,16 @@ LOAD_STORE_W_U:
       ls_address = *reg_p - rm;
     }
 
-    if (cond_passed) {
-      *reg_p = ls_address;
-    }
+    *reg_p = ls_address;
   }
   temp = OP_CODE & LS_W_U_REG_PO_MASK;
   if (temp == LS_W_U_REG_PO_DECODE) {
 
     ls_address = *reg_p;
-    if (cond_passed) {
-      if (U_BIT) {
-        *reg_p = *reg_p + rm;
-      } else {
-        *reg_p = *reg_p - rm;
-      }
+    if (U_BIT) {
+      *reg_p = *reg_p + rm;
+    } else {
+      *reg_p = *reg_p - rm;
     }
   }
 
@@ -479,18 +466,14 @@ LOAD_STORE_W_U:
       ls_address = *reg_p - shifter_operand;
     }
 
-    if (cond_passed) {
-      *reg_p = ls_address;
-    }
+    *reg_p = ls_address;
   }
   temp = OP_CODE & LS_W_U_SCALED_REG_PO_MASK;
   if (temp == LS_W_U_SCALED_REG_PO_DECODE) {
-    if (cond_passed) {
-      if (U_BIT) {
-        *reg_p = *reg_p + shifter_operand;
-      } else {
-        *reg_p = *reg_p - shifter_operand;
-      }
+    if (U_BIT) {
+      *reg_p = *reg_p + shifter_operand;
+    } else {
+      *reg_p = *reg_p - shifter_operand;
     }
   }
   write_instruction_log(arm, "load_store_w_u");
@@ -514,14 +497,14 @@ LOAD_STORE_M:
 
     start_address = *reg_p;
     end_address = *reg_p + (set_bits * 4) - 4;
-    if (cond_passed && IS_BIT_SET(OP_CODE, 21)) {
+    if (IS_BIT_SET(OP_CODE, 21)) {
       *reg_p = end_address + 4;
     }
   } else if (temp == LS_M_IB_DECODE) {
 
     start_address = *reg_p + 4;
     end_address = *reg_p + (set_bits * 4);
-    if (cond_passed && IS_BIT_SET(OP_CODE, 21)) {
+    if (IS_BIT_SET(OP_CODE, 21)) {
       *reg_p = end_address;
     }
 
@@ -529,14 +512,14 @@ LOAD_STORE_M:
     start_address = *reg_p - (set_bits * 4) + 4;
     end_address = *reg_p;
 
-    if (cond_passed && IS_BIT_SET(OP_CODE, 21)) {
+    if (IS_BIT_SET(OP_CODE, 21)) {
       *reg_p = start_address - 4;
     }
 
   } else if (temp == LS_M_DB_DECODE) {
     start_address = *reg_p - (set_bits * 4);
     end_address = *reg_p - 4;
-    if (cond_passed && IS_BIT_SET(OP_CODE, 21)) {
+    if (IS_BIT_SET(OP_CODE, 21)) {
       *reg_p = start_address;
     }
   }
