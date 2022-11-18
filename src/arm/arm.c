@@ -224,7 +224,7 @@ int arm_exec(Arm *arm) {
   // fetch
   arm->data_bus = arm_read(arm->curr_instruction);
   arm->general_regs[15] = arm->curr_instruction + 8; // pc contains + 8
-  arm->curr_instruction += 4;
+  arm->curr_instruction += 4; // address of next instruction
 
   // ---
 
@@ -347,6 +347,7 @@ DECODE:
     goto LOAD_STORE_M;
   } else if ((OP_CODE & BRANCH_LINK_MASK) == BRANCH_LINK_DECODE) {
     // Branch and branch link instructions
+    reg_count = (arm->mode * 16) + 14;  // R14 is link register
     goto BRANCH_LINK;
   } else if ((OP_CODE & SWI_MASK) == SWI_DECODE) {
     // swi instruction
@@ -848,13 +849,15 @@ CONTROL:
 BRANCH_LINK:
 
   // TODO make sure sign extend is correct
-  s_bit = OP_CODE & 0xFFFFFF;
-  s_bit |= IS_BIT_SET(s_bit, 23) * 0x3F000000; // sign extend to 30 bits
-  s_bit = s_bit << 2;
+  shifter_operand = OP_CODE & 0xFFFFFF;
+  shifter_operand = shifter_operand | (IS_BIT_SET(s_bit, 23) * 0x3F000000); // sign extend to 30 bits
+  shifter_operand <<=  2;
   if (IS_BIT_SET(OP_CODE, 24)) {
     // LR = address of the instruction after the branch instruction
+    *arm->reg_table[reg_count] = arm->curr_instruction;
   }
-  arm->general_regs[15] = arm->general_regs[15] + s_bit;
+  arm->general_regs[R_15] += shifter_operand;
+  arm->curr_instruction = arm->general_regs[R_15];
   write_instruction_log(arm, "branch_link");
   goto END;
 COPROCESSOR:
