@@ -20,6 +20,7 @@
 // TODO check fetch implementation ![IMPORTANT]
 // TODO check condition field implementation !{IMPORTANT}
 // TODO implement miscellaneous loads and store instructions  !{DONE - NOT TESTED}
+// TODO check sign extending in miscellaneous loads and store instruction !{DONE}
 #include "arm.h"
 #include "arm_inst_decode.h"
 #include "disassembler.h"
@@ -984,12 +985,12 @@ LOAD_STORE_H_D_S_INSTS:
 
   } else if (temp == LDRSB_DECODE) {
     shifter_operand = arm_read(ls_address) & 0xFF;
-    shifter_operand = shifter_operand & (IS_BIT_SET(shifter_operand, 7) * 0xFFFFFFFF);
+    shifter_operand = shifter_operand | (IS_BIT_SET(shifter_operand, 7) * 0xFFFFFF00);
     *arm->reg_table[reg_count] = shifter_operand;
 
   } else if (temp == LDRSH_DECODE) {
     shifter_operand = arm_read(ls_address) & 0xFFFF;
-    shifter_operand = shifter_operand & (IS_BIT_SET(shifter_operand, 15) * 0xFFFFFFFF);
+    shifter_operand = shifter_operand | (IS_BIT_SET(shifter_operand, 15) * 0xFFFF0000);
     *arm->reg_table[reg_count] = shifter_operand;
     
   } else if (temp == STRH_DECODE) {
