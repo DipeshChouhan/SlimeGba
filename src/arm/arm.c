@@ -23,6 +23,7 @@
 // TESTED}
 // TODO check sign extending in miscellaneous loads and store instruction
 // !{DONE}
+// TODO correct the goto LOAD_STORE_W_U_INSTS implementation !{IMPORTANT}
 #include "arm.h"
 #include "arm_inst_decode.h"
 #include "disassembler.h"
@@ -461,6 +462,9 @@ LOAD_STORE_W_U:
       *reg_p = *reg_p - shifter_operand;
     }
 
+    if (IS_BIT_SET(OP_CODE, 21)) {
+      goto LOAD_STORE_W_U_T_INSTS;
+    }
     goto LOAD_STORE_W_U_INSTS;
   }
 
@@ -497,6 +501,9 @@ LOAD_STORE_W_U:
       *reg_p = *reg_p - rm;
     }
 
+    if (IS_BIT_SET(OP_CODE, 21)) {
+      goto LOAD_STORE_W_U_T_INSTS;
+    }
     goto LOAD_STORE_W_U_INSTS;
   }
   // TODO check below implementation
@@ -567,10 +574,16 @@ LOAD_STORE_W_U:
     } else {
       *reg_p = *reg_p - shifter_operand;
     }
+
+    if (IS_BIT_SET(OP_CODE, 21)) {
+      goto LOAD_STORE_W_U_T_INSTS;
+    }
+    goto LOAD_STORE_W_U_INSTS;
   }
 
+#undef OFFSET_12
   write_instruction_log(arm, "load_store_w_u");
-  goto LOAD_STORE_W_U_INSTS;
+
 LOAD_STORE_M:
 #define reg_list shift_imm
 #define set_bits rotate_imm
@@ -618,7 +631,8 @@ LOAD_STORE_M:
   }
 
   write_instruction_log(arm, "load_store_m");
-  goto END;
+
+  goto LOAD_STORE_M_INSTS;
 #undef reg_list
 #undef set_bits
 #undef start_address
@@ -1042,6 +1056,7 @@ LOAD_STORE_W_U_T_INSTS:
   } else if (temp == STRT_DECODE) {
     arm_write(ls_address, *reg_p);
   }
+  goto END;
 
 LOAD_STORE_W_U_INSTS:
 
