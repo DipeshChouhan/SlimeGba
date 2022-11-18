@@ -1,9 +1,10 @@
 #include <stdio.h>
 
+#include <stdlib.h>
+#include "utils/file_open.h"
 #include "arm/disassembler.h"
 #include "gba/gba.h"
-#include "utils/file_open.h"
-#include <stdlib.h>
+#include "../libs/cJSON/cJSON.h"
 
 Disassembler disassembler;
 int main(int argc, char **argv) {

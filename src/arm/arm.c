@@ -27,6 +27,7 @@
 #include "arm.h"
 #include "arm_inst_decode.h"
 #include "disassembler.h"
+#include "../memory/memory.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -803,6 +804,7 @@ CONTROL:
     arm->state = rm & 1;
     arm->general_regs[R_15] = rm & 0xFFFFFFFE;
     arm->curr_instruction = arm->general_regs[R_15];
+    goto END;
 
   } else if ((OP_CODE & MRS_MASK) == MRS_DECODE) {
     reg_p = arm->reg_table[reg_count + RD_C];
@@ -813,6 +815,7 @@ CONTROL:
         *reg_p = arm->cpsr;
       }
     }
+    goto END;
 
   } else if ((OP_CODE & MSR_IMM_MASK) == MSR_IMM_DECODE) {
     rotate_imm = ROTATE_IMM * 2;
@@ -1011,6 +1014,7 @@ MVN_INST:
     temp |= ((arm->general_regs[rd] == 0) << 30);
     temp |= (shifter_carry_out << 29);
   }
+  goto END;
 
 LOAD_STORE_H_D_S_INSTS:
 
@@ -1082,6 +1086,7 @@ LOAD_STORE_W_U_INSTS:
   } else if (temp == STRB_DECODE) {
     arm_write(ls_address, (*reg_p) & 0xFF); // byte write
   }
+  goto END;
 
 LOAD_STORE_M_INSTS:
 #define start_address shifter_operand
@@ -1152,6 +1157,7 @@ LOAD_STORE_M_INSTS:
     }
     assert(end_address == start_address - 4);
   }
+  goto END;
 
 MUL_INST:
   *reg_p = rm * rs;

@@ -1,7 +1,6 @@
 #ifndef SLIME_ARM_H
 #define SLIME_ARM_H
 #include <stdint.h>
-#include "../bus/sys_bus.h"
 
 typedef enum {
   USR = 0, // user
@@ -46,7 +45,7 @@ typedef struct Arm {
   };
 
   uint8_t iwram[32 * 1024]; // internal work ram
-  SysBus sys_bus;
+  // SysBus *sys_bus;
 } Arm;
 
 
