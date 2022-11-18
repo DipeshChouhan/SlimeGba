@@ -223,7 +223,7 @@ int arm_exec(Arm *arm) {
 
   // fetch
   arm->data_bus = arm_read(arm->curr_instruction);
-  arm->general_regs[15] = arm->curr_instruction + 8; // pc contains + 8
+  arm->general_regs[R_15] = arm->curr_instruction + 8; // pc contains + 8
   arm->curr_instruction += 4; // address of next instruction
 
   // ---
@@ -769,7 +769,9 @@ CONTROL:
     rm = *arm->reg_table[reg_count + RM_C];
     // T bit
     arm->cpsr = SET_BIT(arm->cpsr, 5, (rm & 1));
-    arm->general_regs[15] = rm & 0xFFFFFFFE;
+    arm->state = rm & 1;
+    arm->general_regs[R_15] = rm & 0xFFFFFFFE;
+    arm->curr_instruction = arm->general_regs[R_15];
 
   } else if ((OP_CODE & MRS_MASK) == MRS_DECODE) {
     reg_p = arm->reg_table[reg_count + RD_C];
@@ -1092,8 +1094,8 @@ LOAD_STORE_M_INSTS:
     if (arm->mode > 1) {
       arm->cpsr = arm->spsr[arm->mode - 2];
     }
-    arm->general_regs[15] = arm_read(start_address);
-    arm->curr_instruction = arm->general_regs[15];
+    arm->general_regs[R_15] = arm_read(start_address);
+    arm->curr_instruction = arm->general_regs[R_15];
     start_address += 4;
     assert(end_address == start_address - 4);
   } else if ((OP_CODE & STM1_MASK) == STM1_DECODE) {

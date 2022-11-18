@@ -50,6 +50,8 @@ typedef struct Arm {
 } Arm;
 
 
+#define ARM_STATE 0
+#define THUMB_STATE 1
 #define NF_BIT 31
 #define ZF_BIT 30
 #define CF_BIT 29
