@@ -19,8 +19,10 @@
 // TODO implement B, BL correctly
 // TODO check fetch implementation ![IMPORTANT]
 // TODO check condition field implementation !{IMPORTANT}
-// TODO implement miscellaneous loads and store instructions  !{DONE - NOT TESTED}
-// TODO check sign extending in miscellaneous loads and store instruction !{DONE}
+// TODO implement miscellaneous loads and store instructions  !{DONE - NOT
+// TESTED}
+// TODO check sign extending in miscellaneous loads and store instruction
+// !{DONE}
 #include "arm.h"
 #include "arm_inst_decode.h"
 #include "disassembler.h"
@@ -347,7 +349,7 @@ DECODE:
     goto LOAD_STORE_M;
   } else if ((OP_CODE & BRANCH_LINK_MASK) == BRANCH_LINK_DECODE) {
     // Branch and branch link instructions
-    reg_count = (arm->mode * 16) + 14;  // R14 is link register
+    reg_count = (arm->mode * 16) + 14; // R14 is link register
     goto BRANCH_LINK;
   } else if ((OP_CODE & SWI_MASK) == SWI_DECODE) {
     // swi instruction
@@ -419,7 +421,6 @@ LOAD_STORE_H_D_S:
     }
   }
 
-  
   write_instruction_log(arm, "load_store_h_d_s");
   goto LOAD_STORE_H_D_S_INSTS;
 LOAD_STORE_W_U:
@@ -439,6 +440,7 @@ LOAD_STORE_W_U:
     } else {
       ls_address = *reg_p - shifter_operand;
     }
+    goto LOAD_STORE_W_U_INSTS;
 
   } else if (temp == LS_W_U_IMM_PR_DECODE) {
     if (U_BIT) {
@@ -447,7 +449,8 @@ LOAD_STORE_W_U:
       ls_address = *reg_p - shifter_operand;
     }
 
-    arm->general_regs[reg_count] = ls_address;
+    *reg_p = ls_address;
+    goto LOAD_STORE_W_U_INSTS;
   }
   temp = OP_CODE & LS_W_U_IMM_PO_MASK;
   if (temp == LS_W_U_IMM_PO_DECODE) {
@@ -457,6 +460,8 @@ LOAD_STORE_W_U:
     } else {
       *reg_p = *reg_p - shifter_operand;
     }
+
+    goto LOAD_STORE_W_U_INSTS;
   }
 
   rm = *arm->reg_table[reg_count + RM_C];
@@ -468,6 +473,8 @@ LOAD_STORE_W_U:
       ls_address = *reg_p - rm;
     }
 
+    goto LOAD_STORE_W_U_INSTS;
+
   } else if (temp == LS_W_U_REG_PR_DECODE) {
 
     if (U_BIT) {
@@ -477,6 +484,8 @@ LOAD_STORE_W_U:
     }
 
     *reg_p = ls_address;
+
+    goto LOAD_STORE_W_U_INSTS;
   }
   temp = OP_CODE & LS_W_U_REG_PO_MASK;
   if (temp == LS_W_U_REG_PO_DECODE) {
@@ -487,7 +496,10 @@ LOAD_STORE_W_U:
     } else {
       *reg_p = *reg_p - rm;
     }
+
+    goto LOAD_STORE_W_U_INSTS;
   }
+  // TODO check below implementation
 
   shift_imm = SHIFT_IMM;
   shift = OP_CODE & 0x60;
@@ -535,6 +547,8 @@ LOAD_STORE_W_U:
       ls_address = *reg_p - shifter_operand;
     }
 
+    goto LOAD_STORE_W_U_INSTS;
+
   } else if (temp == LS_W_U_SCALED_REG_PR_DECODE) {
     if (U_BIT) {
       ls_address = *reg_p + shifter_operand;
@@ -543,6 +557,8 @@ LOAD_STORE_W_U:
     }
 
     *reg_p = ls_address;
+
+    goto LOAD_STORE_W_U_INSTS;
   }
   temp = OP_CODE & LS_W_U_SCALED_REG_PO_MASK;
   if (temp == LS_W_U_SCALED_REG_PO_DECODE) {
@@ -552,8 +568,9 @@ LOAD_STORE_W_U:
       *reg_p = *reg_p - shifter_operand;
     }
   }
+
   write_instruction_log(arm, "load_store_w_u");
-  goto END;
+  goto LOAD_STORE_W_U_INSTS;
 LOAD_STORE_M:
 #define reg_list shift_imm
 #define set_bits rotate_imm
@@ -852,8 +869,9 @@ BRANCH_LINK:
 
   // TODO make sure sign extend is correct
   shifter_operand = OP_CODE & 0xFFFFFF;
-  shifter_operand = shifter_operand | (IS_BIT_SET(s_bit, 23) * 0x3F000000); // sign extend to 30 bits
-  shifter_operand <<=  2;
+  shifter_operand = shifter_operand | (IS_BIT_SET(s_bit, 23) *
+                                       0x3F000000); // sign extend to 30 bits
+  shifter_operand <<= 2;
   if (IS_BIT_SET(OP_CODE, 24)) {
     // LR = address of the instruction after the branch instruction
     *arm->reg_table[reg_count] = arm->curr_instruction;
@@ -990,14 +1008,16 @@ LOAD_STORE_H_D_S_INSTS:
 
   } else if (temp == LDRSB_DECODE) {
     shifter_operand = arm_read(ls_address) & 0xFF;
-    shifter_operand = shifter_operand | (IS_BIT_SET(shifter_operand, 7) * 0xFFFFFF00);
+    shifter_operand =
+        shifter_operand | (IS_BIT_SET(shifter_operand, 7) * 0xFFFFFF00);
     *arm->reg_table[reg_count] = shifter_operand;
 
   } else if (temp == LDRSH_DECODE) {
     shifter_operand = arm_read(ls_address) & 0xFFFF;
-    shifter_operand = shifter_operand | (IS_BIT_SET(shifter_operand, 15) * 0xFFFF0000);
+    shifter_operand =
+        shifter_operand | (IS_BIT_SET(shifter_operand, 15) * 0xFFFF0000);
     *arm->reg_table[reg_count] = shifter_operand;
-    
+
   } else if (temp == STRH_DECODE) {
     // TODO implement it
   }
