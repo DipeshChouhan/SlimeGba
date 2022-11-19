@@ -268,3 +268,10 @@ uint32_t mem_read8(Memory *mem) {
   }
   return mem->data_bus;
 }
+
+#undef MEM_WRITE32
+#undef MEM_WRITE16
+#undef MEM_WRITE8
+#undef MEM_READ32
+#undef MEM_READ16
+#undef MEM_READ8

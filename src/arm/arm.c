@@ -24,10 +24,15 @@
 // TODO check sign extending in miscellaneous loads and store instruction
 // !{DONE}
 // TODO correct the goto LOAD_STORE_W_U_INSTS implementation !{IMPORTANT}
+//
+// TODO check STRBT like instruction which access as if in user mode
+// !{IMPORTANT}
+// TODO check arm read and writes !{IMPORTANT}
 #include "arm.h"
+#include "../gba/gba.h"
+#include "../memory/memory.h"
 #include "arm_inst_decode.h"
 #include "disassembler.h"
-#include "../memory/memory.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -93,6 +98,20 @@
 uint32_t arm_read(uint32_t addr) { return 0; }
 
 void arm_write(uint32_t addr, uint32_t value);
+
+#define ARM_WRITE(_address, _data, _type)                                      \
+  ((Gba *)arm)->memory.address_bus = _address;                                 \
+  ((Gba *)arm)->memory.data_bus = _data;                                       \
+  _type(&((Gba *)arm)->memory);
+
+#define ARM_READ(_address, _dest, _type)                                       \
+  ((Gba *)arm)->memory.address_bus = _address;                                 \
+  _dest = _type(&((Gba *)arm)->memory);
+
+#define ARM_FETCH(_address, _dest)                                             \
+  ARM_READ(_address, _dest, mem_read32);                                       \
+  arm->general_regs[R_15] = _address + 8;                                      \
+  _address += 4;
 
 void gen_reg_table(Arm *arm) {
 
@@ -226,10 +245,7 @@ int arm_exec(Arm *arm) {
       &&CHECK_GT, &&CHECK_LE, &&CHECK_AL,    &&UNCONDITIONAL};
 
   // fetch
-  arm->data_bus = arm_read(arm->curr_instruction);
-  arm->general_regs[R_15] = arm->curr_instruction + 8; // pc contains + 8
-  arm->curr_instruction += 4; // address of next instruction
-
+  ARM_FETCH(arm->curr_instruction, arm->data_bus);
   // ---
 
   // goto DECODE;
@@ -1022,22 +1038,26 @@ LOAD_STORE_H_D_S_INSTS:
   reg_count = (arm->mode * 16) + RD_C;
   if (temp == LDRH_DECODE) {
 
-    *arm->reg_table[reg_count] = arm_read(ls_address) & 0xFFFF;
+    // *arm->reg_table[reg_count] = arm_read(ls_address) & 0xFFFF;
+    ARM_READ(ls_address, *arm->reg_table[reg_count], mem_read16);
 
   } else if (temp == LDRSB_DECODE) {
-    shifter_operand = arm_read(ls_address) & 0xFF;
+    // shifter_operand = arm_read(ls_address) & 0xFF;
+    ARM_READ(ls_address, shifter_operand, mem_read8);
     shifter_operand =
         shifter_operand | (IS_BIT_SET(shifter_operand, 7) * 0xFFFFFF00);
     *arm->reg_table[reg_count] = shifter_operand;
 
   } else if (temp == LDRSH_DECODE) {
-    shifter_operand = arm_read(ls_address) & 0xFFFF;
+    // shifter_operand = arm_read(ls_address) & 0xFFFF;
+    ARM_READ(ls_address, shifter_operand, mem_read16);
     shifter_operand =
         shifter_operand | (IS_BIT_SET(shifter_operand, 15) * 0xFFFF0000);
     *arm->reg_table[reg_count] = shifter_operand;
 
   } else if (temp == STRH_DECODE) {
     // TODO implement it
+    ARM_WRITE(ls_address, *arm->reg_table[reg_count], mem_write16);
   }
   goto END;
 
@@ -1047,18 +1067,20 @@ LOAD_STORE_W_U_T_INSTS:
   temp = OP_CODE & 0x1700000;
   reg_p = arm->reg_table[reg_count + RD_C];
   if (temp == LDRBT_DECODE) {
-    *reg_p = arm_read(ls_address);
+    // *reg_p = arm_read(ls_address);
+    ARM_READ(ls_address, *reg_p, mem_read8);
     *arm->reg_table[reg_count + RN_C] = ls_address;
 
   } else if (temp == STRBT_DECODE) {
-    arm_write(ls_address, (*reg_p) & 0xFF);
+    ARM_WRITE(ls_address, *reg_p, mem_write8);
 
   } else if (temp == LDRT_DECODE) {
 
-    *reg_p = arm_read(ls_address);
+    // *reg_p = arm_read(ls_address);
+    ARM_READ(ls_address, *reg_p, mem_read32);
 
   } else if (temp == STRT_DECODE) {
-    arm_write(ls_address, *reg_p);
+    ARM_WRITE(ls_address, *reg_p, mem_write32);
   }
   goto END;
 
@@ -1069,7 +1091,8 @@ LOAD_STORE_W_U_INSTS:
   rd = RD_C;
   reg_p = arm->reg_table[reg_count + rd];
   if (temp == LDR_DECODE) {
-    result = arm_read(ls_address);
+    // result = arm_read(ls_address);
+    ARM_READ(ls_address, result, mem_read32);
     if (rd == R_15) {
       *reg_p = result & 0xFFFFFFFC;
       arm->curr_instruction = *reg_p;
@@ -1078,13 +1101,14 @@ LOAD_STORE_W_U_INSTS:
     }
 
   } else if (temp == STR_DECODE) {
-    arm_write(ls_address, *reg_p); // word write
+    ARM_WRITE(ls_address, *reg_p, mem_write32); // word write
 
   } else if (temp == LDRB_DECODE) {
-    *reg_p = arm_read(ls_address); // unsigned byte memory access
+    // *reg_p = arm_read(ls_address); // unsigned byte memory access
+    ARM_READ(ls_address, *reg_p, mem_read8);
 
   } else if (temp == STRB_DECODE) {
-    arm_write(ls_address, (*reg_p) & 0xFF); // byte write
+    ARM_WRITE(ls_address, *reg_p, mem_write8); // byte write
   }
   goto END;
 
@@ -1099,7 +1123,8 @@ LOAD_STORE_M_INSTS:
   if ((OP_CODE & LDM1_MASK) == LDM1_DECODE) {
     for (i = 0; i < 15; i++) {
       if (reg_list & 1) {
-        *arm->reg_table[reg_count + i] = arm_read(start_address);
+        // *arm->reg_table[reg_count + i] = arm_read(start_address);
+        ARM_READ(start_address, *arm->reg_table[reg_count + i], mem_read32);
         start_address += 4;
       }
       reg_list >>= 1;
@@ -1107,7 +1132,9 @@ LOAD_STORE_M_INSTS:
 
     if (reg_list & 1) {
       // check for pc
-      arm->general_regs[R_15] = arm_read(start_address) & 0xFFFFFFFC;
+      // arm->general_regs[R_15] = arm_read(start_address) & 0xFFFFFFFC;
+
+      ARM_READ(start_address, arm->general_regs[R_15], mem_read32);
       arm->curr_instruction = arm->general_regs[R_15];
       start_address += 4;
     }
@@ -1116,7 +1143,8 @@ LOAD_STORE_M_INSTS:
   } else if ((OP_CODE & LDM2_MASK) == LDM2_DECODE) {
     for (i = 0; i < 15; i++) {
       if (reg_list & 1) {
-        arm->general_regs[i] = arm_read(start_address);
+        // arm->general_regs[i] = arm_read(start_address);
+        ARM_READ(start_address, arm->general_regs[i], mem_read32);
         start_address += 4;
       }
       reg_list >>= 1;
@@ -1126,7 +1154,8 @@ LOAD_STORE_M_INSTS:
   } else if ((OP_CODE & LDM3_MASK) == LDM3_DECODE) {
     for (i = 0; i < 15; i++) {
       if (reg_list & 1) {
-        *arm->reg_table[reg_count + i] = arm_read(start_address);
+        // *arm->reg_table[reg_count + i] = arm_read(start_address);
+        ARM_READ(start_address, *arm->reg_table[reg_count + i], mem_read32);
         start_address += 4;
       }
       reg_list >>= 1;
@@ -1134,14 +1163,15 @@ LOAD_STORE_M_INSTS:
     if (arm->mode > 1) {
       arm->cpsr = arm->spsr[arm->mode - 2];
     }
-    arm->general_regs[R_15] = arm_read(start_address);
+    // arm->general_regs[R_15] = arm_read(start_address);
+    ARM_READ(start_address, arm->general_regs[R_15], mem_read32);
     arm->curr_instruction = arm->general_regs[R_15];
     start_address += 4;
     assert(end_address == start_address - 4);
   } else if ((OP_CODE & STM1_MASK) == STM1_DECODE) {
     for (i = 0; i < 16; i++) {
       if (reg_list & 1) {
-        arm_write(start_address, *arm->reg_table[reg_count + i]);
+        ARM_WRITE(start_address, *arm->reg_table[reg_count + i], mem_write32);
         start_address += 4;
       }
       reg_list >>= 1;
@@ -1150,7 +1180,7 @@ LOAD_STORE_M_INSTS:
   } else if ((OP_CODE & STM2_MASK) == STM2_DECODE) {
     for (i = 0; i < 16; i++) {
       if (reg_list & 1) {
-        arm_write(start_address, arm->general_regs[i]);
+        ARM_WRITE(start_address, arm->general_regs[i], mem_write32);
         start_address += 4;
       }
       reg_list >>= 1;
