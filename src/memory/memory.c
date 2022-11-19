@@ -1,4 +1,3 @@
-
 #include "memory.h"
 
 /*General Internal Memory
@@ -24,35 +23,248 @@ External Memory (Game Pak)
   0E000000-0E00FFFF   Game Pak SRAM    (max 64 KBytes) - 8bit Bus width
   0E010000-0FFFFFFF   Not used
 Unused Memory Area
-  10000000-FFFFFFFF   Not used (upper 4bits of address bus unused)
+  10000000-FFFFFFFF   Not used (upper 4bits of mem->address_bus bus unused)
   */
-void mem_write32(uint32_t address, uint32_t value) {
-  if (address < 0x4000) {
-    // bios rom
-  } else if (address >= 0x2000000 && address <= 0x203FFFF) {
-    
 
-  } else if (address >= 0x3000000 && address <= 0x3007FFF) {
+#define MEM_WRITE32(_ram)                                                      \
+  _ram[mem->address_bus] = mem->data_bus;                                      \
+  _ram[mem->address_bus + 1] = mem->data_bus >> 8;                             \
+  _ram[mem->address_bus + 2] = mem->data_bus >> 16;                            \
+  _ram[mem->address_bus + 3] = mem->data_bus >> 24;
 
-  } else if (address >= 0x4000000 && address <= 0x40003FE) {
+#define MEM_WRITE16(_ram)                                                      \
+  _ram[mem->address_bus] = mem->data_bus;                                      \
+  _ram[mem->address_bus + 1] = mem->data_bus >> 8;
 
-  } else if (address >= 0x5000000 && address <= 0x50003FF) {
+#define MEM_WRITE8(_ram) _ram[mem->address_bus] = mem->data_bus;
 
-  } else if (address >= 0x6000000 && address <= 0x6017FFF) {
+#define MEM_READ32(_ram)                                                       \
+  mem->data_bus = (_ram[mem->address_bus + 3] << 24) |                         \
+                  (_ram[mem->address_bus + 2] << 16) |                         \
+                  (_ram[mem->address_bus + 1] << 8) |                          \
+                  (_ram[mem->address_bus]);
 
-  } else if (address >= 0x7000000 && address <= 0x70003FF) {
+#define MEM_READ16(_ram)                                                       \
+  mem->data_bus = (_ram[mem->address_bus + 1] << 8) | (_ram[mem->address_bus]);
 
-  } else if (address >= 0x8000000 && address <= 0x9FFFFFF) {
+#define MEM_READ8(_ram) mem->data_bus = _ram[mem->address_bus];
 
-  } else if (address >= 0xA000000 && address <= 0xBFFFFFF) {
+void mem_write32(Memory *mem) {
+  // if (mem->address_bus < 0x4000) {
+  //   // bios rom
+  // }
+  if (mem->address_bus >= 0x2000000 && mem->address_bus <= 0x203FFFF) {
 
-  } else if (address >= 0xC000000 && address <= 0xDFFFFFF) {
+    // WRAM - on-board Work RAM
+    MEM_WRITE32(mem->wram);
+  } else if (mem->address_bus >= 0x3000000 && mem->address_bus <= 0x3007FFF) {
+    // WRAM - On-chip work RAM
+    MEM_WRITE32(mem->iwram);
 
-  } else if (address >= 0xE000000 && address <= 0xE00FFFF) {
+  } else if (mem->address_bus >= 0x4000000 && mem->address_bus <= 0x40003FE) {
+    // IO Registers
+    MEM_WRITE32(mem->io_ram);
 
+  } else if (mem->address_bus >= 0x5000000 && mem->address_bus <= 0x50003FF) {
+    // BG/OBJ Palette RAM
+    MEM_WRITE32(mem->palette_ram);
+
+  } else if (mem->address_bus >= 0x6000000 && mem->address_bus <= 0x6017FFF) {
+    // VRAM - Video RAM
+    MEM_WRITE32(mem->vram);
+
+  } else if (mem->address_bus >= 0x7000000 && mem->address_bus <= 0x70003FF) {
+    // OAM- OBJ Attributes
+    MEM_WRITE32(mem->oam);
+  } else if (mem->address_bus >= 0x8000000 && mem->address_bus <= 0x9FFFFFF) {
+
+  } else if (mem->address_bus >= 0xA000000 && mem->address_bus <= 0xBFFFFFF) {
+
+  } else if (mem->address_bus >= 0xC000000 && mem->address_bus <= 0xDFFFFFF) {
+
+  } else if (mem->address_bus >= 0xE000000 && mem->address_bus <= 0xE00FFFF) {
+    // Game Pak SRAM
   }
-
   // unused
 }
 
-uint32_t mem_read32(uint32_t address) { return 0; }
+
+void mem_write16(Memory *mem) {
+
+  if (mem->address_bus >= 0x2000000 && mem->address_bus <= 0x203FFFF) {
+
+    // WRAM - on-board Work RAM
+    MEM_WRITE16(mem->wram);
+  } else if (mem->address_bus >= 0x3000000 && mem->address_bus <= 0x3007FFF) {
+    // WRAM - On-chip work RAM
+    MEM_WRITE16(mem->iwram);
+
+  } else if (mem->address_bus >= 0x4000000 && mem->address_bus <= 0x40003FE) {
+    // IO Registers
+    MEM_WRITE16(mem->io_ram);
+
+  } else if (mem->address_bus >= 0x5000000 && mem->address_bus <= 0x50003FF) {
+    // BG/OBJ Palette RAM
+    MEM_WRITE16(mem->palette_ram);
+
+  } else if (mem->address_bus >= 0x6000000 && mem->address_bus <= 0x6017FFF) {
+    // VRAM - Video RAM
+    MEM_WRITE16(mem->vram);
+
+  } else if (mem->address_bus >= 0x7000000 && mem->address_bus <= 0x70003FF) {
+    // OAM- OBJ Attributes
+    MEM_WRITE16(mem->oam);
+  } else if (mem->address_bus >= 0x8000000 && mem->address_bus <= 0x9FFFFFF) {
+
+  } else if (mem->address_bus >= 0xA000000 && mem->address_bus <= 0xBFFFFFF) {
+
+  } else if (mem->address_bus >= 0xC000000 && mem->address_bus <= 0xDFFFFFF) {
+
+  } else if (mem->address_bus >= 0xE000000 && mem->address_bus <= 0xE00FFFF) {
+    // Game Pak SRAM
+  }
+}
+
+void mem_write8(Memory *mem) {
+
+  if (mem->address_bus >= 0x2000000 && mem->address_bus <= 0x203FFFF) {
+
+    // WRAM - on-board Work RAM
+    MEM_WRITE8(mem->wram);
+  } else if (mem->address_bus >= 0x3000000 && mem->address_bus <= 0x3007FFF) {
+    // WRAM - On-chip work RAM
+    MEM_WRITE8(mem->iwram);
+
+  } else if (mem->address_bus >= 0x4000000 && mem->address_bus <= 0x40003FE) {
+    // IO Registers
+    MEM_WRITE8(mem->io_ram);
+
+  } else if (mem->address_bus >= 0xE000000 && mem->address_bus <= 0xE00FFFF) {
+    // Game Pak SRAM
+  }
+}
+
+
+uint32_t mem_read32(Memory *mem) {
+
+  if (mem->address_bus < 0x4000) {
+    // bios rom
+    MEM_READ32(mem->bios_rom);
+
+  } else if (mem->address_bus >= 0x2000000 && mem->address_bus <= 0x203FFFF) {
+
+    // WRAM - on-board Work RAM
+    MEM_READ32(mem->wram);
+  } else if (mem->address_bus >= 0x3000000 && mem->address_bus <= 0x3007FFF) {
+    // WRAM - On-chip work RAM
+    MEM_READ32(mem->iwram);
+
+  } else if (mem->address_bus >= 0x4000000 && mem->address_bus <= 0x40003FE) {
+    // IO Registers
+    MEM_READ32(mem->io_ram);
+
+  } else if (mem->address_bus >= 0x5000000 && mem->address_bus <= 0x50003FF) {
+    // BG/OBJ Palette RAM
+    MEM_READ32(mem->palette_ram);
+
+  } else if (mem->address_bus >= 0x6000000 && mem->address_bus <= 0x6017FFF) {
+    // VRAM - Video RAM
+    MEM_READ32(mem->vram);
+
+  } else if (mem->address_bus >= 0x7000000 && mem->address_bus <= 0x70003FF) {
+    // OAM- OBJ Attributes
+    MEM_READ32(mem->oam);
+  } else if (mem->address_bus >= 0x8000000 && mem->address_bus <= 0x9FFFFFF) {
+
+  } else if (mem->address_bus >= 0xA000000 && mem->address_bus <= 0xBFFFFFF) {
+
+  } else if (mem->address_bus >= 0xC000000 && mem->address_bus <= 0xDFFFFFF) {
+
+  } else if (mem->address_bus >= 0xE000000 && mem->address_bus <= 0xE00FFFF) {
+    // Game Pak SRAM
+  }
+  return mem->data_bus;
+}
+
+uint32_t mem_read16(Memory *mem) {
+
+  if (mem->address_bus < 0x4000) {
+    // bios rom
+    MEM_READ16(mem->bios_rom);
+
+  } else if (mem->address_bus >= 0x2000000 && mem->address_bus <= 0x203FFFF) {
+
+    // WRAM - on-board Work RAM
+    MEM_READ16(mem->wram);
+  } else if (mem->address_bus >= 0x3000000 && mem->address_bus <= 0x3007FFF) {
+    // WRAM - On-chip work RAM
+    MEM_READ16(mem->iwram);
+
+  } else if (mem->address_bus >= 0x4000000 && mem->address_bus <= 0x40003FE) {
+    // IO Registers
+    MEM_READ16(mem->io_ram);
+
+  } else if (mem->address_bus >= 0x5000000 && mem->address_bus <= 0x50003FF) {
+    // BG/OBJ Palette RAM
+    MEM_READ16(mem->palette_ram);
+
+  } else if (mem->address_bus >= 0x6000000 && mem->address_bus <= 0x6017FFF) {
+    // VRAM - Video RAM
+    MEM_READ16(mem->vram);
+
+  } else if (mem->address_bus >= 0x7000000 && mem->address_bus <= 0x70003FF) {
+    // OAM- OBJ Attributes
+    MEM_READ16(mem->oam);
+  } else if (mem->address_bus >= 0x8000000 && mem->address_bus <= 0x9FFFFFF) {
+
+  } else if (mem->address_bus >= 0xA000000 && mem->address_bus <= 0xBFFFFFF) {
+
+  } else if (mem->address_bus >= 0xC000000 && mem->address_bus <= 0xDFFFFFF) {
+
+  } else if (mem->address_bus >= 0xE000000 && mem->address_bus <= 0xE00FFFF) {
+    // Game Pak SRAM
+  }
+  return mem->data_bus;
+}
+
+
+uint32_t mem_read8(Memory *mem) {
+
+  if (mem->address_bus < 0x4000) {
+    // bios rom
+    MEM_READ8(mem->bios_rom);
+
+  } else if (mem->address_bus >= 0x2000000 && mem->address_bus <= 0x203FFFF) {
+
+    // WRAM - on-board Work RAM
+    MEM_READ8(mem->wram);
+  } else if (mem->address_bus >= 0x3000000 && mem->address_bus <= 0x3007FFF) {
+    // WRAM - On-chip work RAM
+    MEM_READ8(mem->iwram);
+
+  } else if (mem->address_bus >= 0x4000000 && mem->address_bus <= 0x40003FE) {
+    // IO Registers
+    MEM_READ8(mem->io_ram);
+
+  } else if (mem->address_bus >= 0x5000000 && mem->address_bus <= 0x50003FF) {
+    // BG/OBJ Palette RAM
+    MEM_READ8(mem->palette_ram);
+
+  } else if (mem->address_bus >= 0x6000000 && mem->address_bus <= 0x6017FFF) {
+    // VRAM - Video RAM
+    MEM_READ8(mem->vram);
+
+  } else if (mem->address_bus >= 0x7000000 && mem->address_bus <= 0x70003FF) {
+    // OAM- OBJ Attributes
+    MEM_READ8(mem->oam);
+  } else if (mem->address_bus >= 0x8000000 && mem->address_bus <= 0x9FFFFFF) {
+
+  } else if (mem->address_bus >= 0xA000000 && mem->address_bus <= 0xBFFFFFF) {
+
+  } else if (mem->address_bus >= 0xC000000 && mem->address_bus <= 0xDFFFFFF) {
+
+  } else if (mem->address_bus >= 0xE000000 && mem->address_bus <= 0xE00FFFF) {
+    // Game Pak SRAM
+  }
+  return mem->data_bus;
+}

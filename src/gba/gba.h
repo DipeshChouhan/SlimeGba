@@ -8,7 +8,7 @@
 typedef struct Gba {
 
   Arm arm;
-  Memory *memory;
+  Memory memory;
 
 } Gba ;
 

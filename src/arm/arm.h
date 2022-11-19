@@ -17,9 +17,10 @@ typedef struct Arm {
   int state; // 1 for thumb and 0 for arm state
   Mode mode; // operation mode
 
-  uint32_t curr_instruction;
+  uint32_t curr_instruction;  // address
   int shifter_carry_out; // internal
   uint32_t data_bus;     // 32 bit data bus
+  uint32_t address_bus;
 
   // r15 is program counter register
   uint32_t general_regs[16]; // general purpose registers r0 - r15. User and
@@ -44,7 +45,6 @@ typedef struct Arm {
     uint32_t spsr_und;
   };
 
-  uint8_t iwram[32 * 1024]; // internal work ram
   // SysBus *sys_bus;
 } Arm;
 
