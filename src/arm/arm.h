@@ -58,6 +58,16 @@ typedef struct Arm {
 #define IS_BIT_SET(_op, _bit) ((_op & (1 << _bit)) == (1 << _bit))
 #define ROTATE_RIGHT32(_op, _ror) ((_op >> _ror) | (_op << (32 - _ror)))
 
+
+#define MEM_WRITE(_address, _data, _type)                                      \
+  ((Gba *)arm)->memory.address_bus = _address;                                 \
+  ((Gba *)arm)->memory.data_bus = _data;                                       \
+  _type(&((Gba *)arm)->memory);
+
+#define MEM_READ(_address, _dest, _type)                                       \
+  ((Gba *)arm)->memory.address_bus = _address;                                 \
+  _dest = _type(&((Gba *)arm)->memory);
+
 void init_arm(Arm *arm);
 // execute a single arm mode instruction and returns cycle count
 int arm_exec(Arm *arm);

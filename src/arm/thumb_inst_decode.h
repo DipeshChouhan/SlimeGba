@@ -71,4 +71,7 @@
 #define STR2_DECODE 0x5000
 #define STRB2_DECODE 0x5400
 #define STRH2_DECODE 0x5200
+
+#define LDR4_DECODE 0x9800
+#define STR3_DECODE 0x9000
 #endif

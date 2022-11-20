@@ -1,8 +1,12 @@
 // TODO - Implement flag setting for data processing instructions !{IMPORTANT}
 #include "arm.h"
 #include "thumb_inst_decode.h"
+#include <assert.h>
 #include <stdint.h>
 #include <stdlib.h>
+
+#include "../gba/gba.h"
+#include "../memory/memory.h"
 
 #define OP_CODE arm->data_bus
 
@@ -35,6 +39,7 @@ int thumb_exec(Arm *arm) {
   uint32_t reg_count = 0;
   uint32_t *reg_p = NULL;
   uint32_t imm_value = 0;
+  uint32_t address = 0;
 
   static void *dp_inst_table[] = {
       &&ADD3, &&SUB3, &&ADD1, &&SUB1, &&MOV1, &&CMP1, &&ADD2, &&SUB2, &&LSL1,
@@ -118,52 +123,209 @@ DECODE:
     goto *dp_inst_table[31 + ((OP_CODE >> 8) & 3)];
   }
 
+#define immed_5 ((OP_CODE >> 6) & 0x1F)
+#define RN_F1 arm->general_regs[((OP_CODE >> 3) & 7)]
+#define RD_F1 arm->general_regs[(OP_CODE & 7)]
+#define immed_8 (OP_CODE & 0xFF)
+#define RD_F3 arm->general_regs[(OP_CODE >> 8) & 7]
+#define RN_F3 arm->general_regs[(OP_CODE >> 8) & 7]
+#define RM_F2 arm->general_regs[(OP_CODE >> 6) & 7]
+
   temp = OP_CODE & LOAD_STORE_F1_MASK;
 
   if (temp == LDR1_DECODE) {
+    imm_value = immed_5 * 4;
+    address = RN_F1 + imm_value;
+    MEM_READ(address, RD_F1, mem_read32);
+    goto END;
 
   } else if (temp == LDRB1_DECODE) {
+    address = RN_F1 + immed_5;
+    MEM_READ(address, RD_F1, mem_read8);
+    goto END;
 
   } else if (temp == LDRH1_DECODE) {
+    imm_value = immed_5 * 2;
+    address = RN_F1 + imm_value;
+    MEM_READ(address, RD_F1, mem_read16);
+    goto END;
 
   } else if (temp == STR1_DECODE) {
+    imm_value = immed_5 * 4;
+    address = RN_F1 + imm_value;
+    MEM_WRITE(address, RD_F1, mem_write32);
+    goto END;
 
   } else if (temp == STRB1_DECODE) {
+    address = RN_F1 + immed_5;
+    MEM_WRITE(address, RD_F1, mem_write8);
+    goto END;
 
   } else if (temp == STRH1_DECODE) {
+    imm_value = immed_5 * 2;
+    address = RN_F1 + imm_value;
+    MEM_WRITE(address, RD_F1, mem_write16);
+    goto END;
 
   } else if (temp == LDR3_DECODE) {
+
+    imm_value = immed_8 * 4;
+    address = (arm->general_regs[15] & 0xFFFFFFFC) + imm_value;
+    MEM_READ(address, RD_F3, mem_read32);
+    goto END;
+  } else if (temp == LDR4_DECODE) {
+    reg_count = arm->mode * 16;
+    imm_value = immed_8 * 4;
+    address = *arm->reg_table[reg_count + 13] + imm_value;
+    MEM_READ(address, RD_F3, mem_read32);
+    goto END;
+
+  } else if (temp == STR3_DECODE) {
+    reg_count = arm->mode * 16;
+    imm_value = immed_8 * 4;
+    address = *arm->reg_table[reg_count + 13] + imm_value;
+    MEM_WRITE(address, RD_F3, mem_write32);
+    goto END;
+
   } else if (temp == LDMIA_DECODE) {
 
+    imm_value = immed_8; // reglist
+    address = RN_F3;     // start address
+    reg_count = 0;       // register count
+    rm = 0;              // number of set bits
+    while (imm_value) {
+      if (imm_value & 1) {
+        MEM_READ(address, arm->general_regs[reg_count], mem_read32);
+        address += 4;
+        ++rm;
+      }
+      imm_value >>= 1;
+      ++reg_count;
+    }
+
+    assert(((RN_F3 + (rm * 4)) - 4) == address - 4);
+    RN_F3 = RN_F3 + (rm * 4);
+    goto END;
+
   } else if (temp == STMIA_DECODE) {
+
+    imm_value = immed_8; // reglist
+    address = RN_F3;     // start address
+    reg_count = 0;       // register count
+    rm = 0;              // number of set bits
+    while (imm_value) {
+      if (imm_value & 1) {
+        MEM_WRITE(address, arm->general_regs[reg_count], mem_write32);
+        address += 4;
+        ++rm;
+      }
+      imm_value >>= 1;
+      ++reg_count;
+    }
+
+    assert(((RN_F3 + (rm * 4)) - 4) == address - 4);
+    RN_F3 = RN_F3 + (rm * 4);
+    goto END;
   }
 
+  address = RN_F1 + RM_F2;
   temp = OP_CODE & LOAD_STORE_F2_MASK;
 
   if (temp == LDR2_DECODE) {
+    MEM_READ(address, RD_F1, mem_read32);
+    goto END;
 
   } else if (temp == LDRB2_DECODE) {
-
+    MEM_READ(address, RD_F1, mem_read8);
+    goto END;
   } else if (temp == LDRH2_DECODE) {
+    MEM_READ(address, RD_F1, mem_read16);
+    goto END;
 
   } else if (temp == STR2_DECODE) {
-
+    MEM_WRITE(address, RD_F1, mem_write32);
+    goto END;
   } else if (temp == STRB2_DECODE) {
+    MEM_WRITE(address, RD_F1, mem_write8);
+    goto END;
 
   } else if (temp == STRH2_DECODE) {
+    MEM_WRITE(address, RD_F1, mem_write16);
+    goto END;
 
   } else if (temp == LDRSB_DECODE) {
+    MEM_READ(address, imm_value, mem_read8);
+    RD_F1 |= (IS_BIT_SET(imm_value, 7) * 0xFFFFFF00);
+    goto END;
 
   } else if (temp == LDRSH_DECODE) {
+    MEM_READ(address, imm_value, mem_read16);
+    RD_F1 |= (IS_BIT_SET(imm_value, 15) * 0xFFFF0000);
+    goto END;
   } else if (temp == PUSH) {
+    imm_value = immed_8; // reg list
+
+    rm = 0; // number of set bits
+    while (imm_value) {
+      rm += imm_value & 1;
+      imm_value >>= 1;
+    }
+    imm_value = immed_8;
+    rn = IS_BIT_SET(OP_CODE, 8);  // R bit
+    address = *arm->reg_table[(arm->mode * 16) + 13] -
+              4 * (rn + rm);
+
+    reg_count = 0;
+    while(imm_value) {
+      if (imm_value & 1) {
+        MEM_WRITE(address, arm->general_regs[reg_count], mem_write32);
+        address += 4;
+      }
+      ++reg_count;
+      imm_value >>= 1;
+    }
+
+    reg_count = arm->mode * 16;
+    if (rn) {
+      MEM_WRITE(address, *arm->reg_table[reg_count + 14], mem_write32);
+      address += 4;
+    }
+    assert((*arm->reg_table[reg_count + 13] - 4) == address - 4);
+    *arm->reg_table[reg_count + 13] -= 4 * (rn + rm);
+    goto END;
 
   } else if (temp == POP) {
+    address = *arm->reg_table[(arm->mode * 16) + 13];  // SP
+    imm_value = immed_8;  // reg list
+    rn = IS_BIT_SET(OP_CODE, 8);  // R Bit
+    reg_count  = 0;
+    rm = 0; // number of set bits
+    while(imm_value) {
+      if (imm_value & 1) {
+        MEM_READ(address, arm->general_regs[reg_count], mem_read32);
+        address += 4;
+        ++rm;
+      }
+      imm_value >>= 1;
+      ++reg_count;
+    }
+
+    if (rn) {
+      MEM_READ(address, imm_value, mem_read32);
+      arm->general_regs[15] = imm_value & 0xFFFFFFFE;
+      address += 4;
+    }
+    reg_count = arm->mode * 16;
+    assert((*arm->reg_table[reg_count + 13] + 4*(rn + rm)) == address);
+    *arm->reg_table[reg_count + 13] = *arm->reg_table[reg_count + 13] + 4 *(rn + rm);
+    goto END;
   }
 
 ADD3:
   result = rn + rm;
   *reg_p = result;
   FLAGS_NZCV(*reg_p, rn, rm);
+  goto END;
 ADD1:
 
   result = rn + imm_value;
