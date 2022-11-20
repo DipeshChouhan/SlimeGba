@@ -1,5 +1,6 @@
 // TODO - Implement flag setting for data processing instructions !{DONE NOT
 // TODO - check sign extending in Branch instruction !{IMPORTANT}
+// TODO - check instruction fetch
 // TESTED}
 #include "arm.h"
 #include "thumb_inst_decode.h"
@@ -31,6 +32,11 @@
 
 #define FLAG_C(_to) arm->cpsr |= (arm->cpsr & (~0x20000000)) | (_to << 29);
 
+#define THUMB_FETCH(_address, _dest)                                           \
+  MEM_READ(_address, _dest, mem_read16);                                       \
+  arm->general_regs[15] = _address + 4;                                        \
+  _address += 2;
+
 int thumb_exec(Arm *arm) {
 
   uint32_t temp = 0;
@@ -53,6 +59,8 @@ int thumb_exec(Arm *arm) {
       &&CHECK_EQ, &&CHECK_NE, &&CHECK_CS_HS, &&CHECK_CC_LO, &&CHECK_MI,
       &&CHECK_PL, &&CHECK_VS, &&CHECK_VC,    &&CHECK_HI,    &&CHECK_LS,
       &&CHECK_GE, &&CHECK_LT, &&CHECK_GT,    &&CHECK_LE,    &&UNDEFINED};
+
+  THUMB_FETCH(arm->curr_instruction, arm->data_bus);
 
 DECODE:
 
@@ -164,8 +172,9 @@ DECODE:
       reg_count = arm->mode * 16;
       arm->general_regs[15] =
           *arm->reg_table[reg_count + 14] + (imm_value << 1);
-      // TODO implement it
+      // TODO check correctness
       // LR = (address of next instruction) | 1
+      *arm->reg_table[reg_count + 14] = (arm->curr_instruction | 1);
       goto END;
     }
 
