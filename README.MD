@@ -1,1 +1,1 @@
-### Slime is a Gameboy Advance Emulator. (In development)
+### SlimeGba is a Gameboy Advance Emulator. (In development)
