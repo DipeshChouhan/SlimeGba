@@ -17,9 +17,9 @@ typedef struct Arm {
   int state; // 1 for thumb and 0 for arm state
   Mode mode; // operation mode
 
-  uint32_t curr_instruction;  // address
-  int shifter_carry_out; // internal
-  uint32_t data_bus;     // 32 bit data bus
+  uint32_t curr_instruction; // address
+  int shifter_carry_out;     // internal
+  uint32_t data_bus;         // 32 bit data bus
   uint32_t address_bus;
 
   // r15 is program counter register
@@ -48,7 +48,6 @@ typedef struct Arm {
   // SysBus *sys_bus;
 } Arm;
 
-
 #define ARM_STATE 0
 #define THUMB_STATE 1
 #define NF_BIT 31
@@ -58,6 +57,7 @@ typedef struct Arm {
 #define IS_BIT_SET(_op, _bit) ((_op & (1 << _bit)) == (1 << _bit))
 #define ROTATE_RIGHT32(_op, _ror) ((_op >> _ror) | (_op << (32 - _ror)))
 
+#define GET_BIT(_op, _bit) ((_op >> _bit) & 1)
 
 #define MEM_WRITE(_address, _data, _type)                                      \
   ((Gba *)arm)->memory.address_bus = _address;                                 \

@@ -1,4 +1,6 @@
-// TODO - Implement flag setting for data processing instructions !{IMPORTANT}
+// TODO - Implement flag setting for data processing instructions !{DONE NOT
+// TODO - check sign extending in Branch instruction !{IMPORTANT}
+// TESTED}
 #include "arm.h"
 #include "thumb_inst_decode.h"
 #include <assert.h>
@@ -47,6 +49,11 @@ int thumb_exec(Arm *arm) {
       &&ROR,  &&TST,  &&NEG,  &&CMP2, &&CMN,  &&ORR,  &&MUL,  &&BIC,  &&MVN,
       &&ADD5, &&ADD6, &&ADD7, &&SUB4, &&ADD4, &&CMP3, &&MOV3, &&CPY};
 
+  static void *cond_field_table[] = {
+      &&CHECK_EQ, &&CHECK_NE, &&CHECK_CS_HS, &&CHECK_CC_LO, &&CHECK_MI,
+      &&CHECK_PL, &&CHECK_VS, &&CHECK_VC,    &&CHECK_HI,    &&CHECK_LS,
+      &&CHECK_GE, &&CHECK_LT, &&CHECK_GT,    &&CHECK_LE,    &&UNDEFINED};
+
 DECODE:
 
   if ((OP_CODE & SWI_MASK) == SWI_DECODE) {
@@ -54,8 +61,115 @@ DECODE:
   }
 
   if ((OP_CODE & COND_BRANCH_MASK) == COND_BRANCH_DECODE) {
+    // B1
+    //
+
+  CHECK_EQ:
+    if (IS_BIT_SET(OP_CODE, ZF_BIT)) {
+      goto B1_INST;
+    }
+    goto END;
+  CHECK_NE:
+    if (IS_BIT_SET(OP_CODE, ZF_BIT)) {
+      goto END;
+    }
+    goto B1_INST;
+  CHECK_CS_HS:
+    if (IS_BIT_SET(OP_CODE, CF_BIT)) {
+      goto B1_INST;
+    }
+    goto END;
+  CHECK_CC_LO:
+    if (IS_BIT_SET(OP_CODE, CF_BIT)) {
+      goto END;
+    }
+    goto B1_INST;
+  CHECK_MI:
+    if (IS_BIT_SET(OP_CODE, NF_BIT)) {
+      goto B1_INST;
+    }
+    goto END;
+  CHECK_PL:
+    if (IS_BIT_SET(OP_CODE, NF_BIT)) {
+      goto END;
+    }
+    goto B1_INST;
+  CHECK_VS:
+    if (IS_BIT_SET(OP_CODE, VF_BIT)) {
+      goto B1_INST;
+    }
+    goto END;
+  CHECK_VC:
+    if (IS_BIT_SET(OP_CODE, VF_BIT)) {
+      goto END;
+    }
+    goto B1_INST;
+  CHECK_HI:
+    // c set and z clear
+    if ((OP_CODE & 0x60000000) == 0x20000000) {
+      goto B1_INST;
+    }
+    goto END;
+  CHECK_LS:
+    if ((IS_BIT_SET(OP_CODE, CF_BIT) == 0) || IS_BIT_SET(OP_CODE, ZF_BIT)) {
+      goto B1_INST;
+    }
+    goto END;
+  CHECK_GE:
+    if (GET_BIT(OP_CODE, NF_BIT) == GET_BIT(OP_CODE, VF_BIT)) {
+      goto B1_INST;
+    }
+    goto END;
+  CHECK_LT:
+    if (GET_BIT(OP_CODE, NF_BIT) != GET_BIT(OP_CODE, VF_BIT)) {
+      goto B1_INST;
+    }
+    goto END;
+  CHECK_GT:
+    if ((IS_BIT_SET(OP_CODE, ZF_BIT) == 0) &&
+        (GET_BIT(OP_CODE, NF_BIT) == GET_BIT(OP_CODE, VF_BIT))) {
+      goto B1_INST;
+    }
+    goto END;
+  CHECK_LE:
+    if (IS_BIT_SET(OP_CODE, ZF_BIT) ||
+        (GET_BIT(OP_CODE, NF_BIT) != GET_BIT(OP_CODE, VF_BIT))) {
+      goto B1_INST;
+    }
+    goto END;
+
+  B1_INST:
+    imm_value = OP_CODE & 0xFF;
+    arm->general_regs[15] += ((IS_BIT_SET(imm_value, 7) * 0xFFFFFF00) << 1);
+    goto END;
 
   } else if ((OP_CODE & UNCOND_BRANCH_MASK) == UNCOND_BRANCH_DECODE) {
+    temp = OP_CODE & 0x1800;       // bits 11 and 12
+                                   // 0xFFFFF800
+    imm_value = (OP_CODE & 0x7FF); // signed_immed_11
+    if (temp == 0x0) {
+      // B2
+      arm->general_regs[15] += ((IS_BIT_SET(imm_value, 10) * 0xFFFFF800) << 1);
+      goto END;
+    } else if (temp == 0x1000) {
+      // BL H = 10 form
+      reg_count = arm->mode * 16;
+      *arm->reg_table[reg_count + 14] =
+          arm->general_regs[15] +
+          ((IS_BIT_SET(imm_value, 10) * 0xFFFFF800) << 12);
+
+      goto END;
+    } else if (temp == 0x1800) {
+      // BL H = 11 form
+      reg_count = arm->mode * 16;
+      arm->general_regs[15] =
+          *arm->reg_table[reg_count + 14] + (imm_value << 1);
+      // TODO implement it
+      // LR = (address of next instruction) | 1
+      goto END;
+    }
+
+    goto UNDEFINED;
 
   } else if ((OP_CODE & BRANCH_EXCHANGE_MASK) == BRANCH_EXCHANGE_DECODE) {
 
@@ -271,12 +385,11 @@ DECODE:
       imm_value >>= 1;
     }
     imm_value = immed_8;
-    rn = IS_BIT_SET(OP_CODE, 8);  // R bit
-    address = *arm->reg_table[(arm->mode * 16) + 13] -
-              4 * (rn + rm);
+    rn = IS_BIT_SET(OP_CODE, 8); // R bit
+    address = *arm->reg_table[(arm->mode * 16) + 13] - 4 * (rn + rm);
 
     reg_count = 0;
-    while(imm_value) {
+    while (imm_value) {
       if (imm_value & 1) {
         MEM_WRITE(address, arm->general_regs[reg_count], mem_write32);
         address += 4;
@@ -295,12 +408,12 @@ DECODE:
     goto END;
 
   } else if (temp == POP) {
-    address = *arm->reg_table[(arm->mode * 16) + 13];  // SP
-    imm_value = immed_8;  // reg list
-    rn = IS_BIT_SET(OP_CODE, 8);  // R Bit
-    reg_count  = 0;
+    address = *arm->reg_table[(arm->mode * 16) + 13]; // SP
+    imm_value = immed_8;                              // reg list
+    rn = IS_BIT_SET(OP_CODE, 8);                      // R Bit
+    reg_count = 0;
     rm = 0; // number of set bits
-    while(imm_value) {
+    while (imm_value) {
       if (imm_value & 1) {
         MEM_READ(address, arm->general_regs[reg_count], mem_read32);
         address += 4;
@@ -316,8 +429,9 @@ DECODE:
       address += 4;
     }
     reg_count = arm->mode * 16;
-    assert((*arm->reg_table[reg_count + 13] + 4*(rn + rm)) == address);
-    *arm->reg_table[reg_count + 13] = *arm->reg_table[reg_count + 13] + 4 *(rn + rm);
+    assert((*arm->reg_table[reg_count + 13] + 4 * (rn + rm)) == address);
+    *arm->reg_table[reg_count + 13] =
+        *arm->reg_table[reg_count + 13] + 4 * (rn + rm);
     goto END;
   }
 
@@ -526,7 +640,7 @@ CMP3:
 MOV3:
   *reg_p = rm;
 CPY:
-
+UNDEFINED:
 END:
   return 0;
 }

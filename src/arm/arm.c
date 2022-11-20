@@ -27,7 +27,6 @@
 //
 // TODO check STRBT like instruction which access as if in user mode
 // !{IMPORTANT}
-// TODO check arm read and writes !{IMPORTANT}
 #include "arm.h"
 #include "../gba/gba.h"
 #include "../memory/memory.h"
@@ -85,8 +84,6 @@
       arm->curr_instruction = arm->general_regs[R_15];                         \
     }                                                                          \
   }
-
-#define GET_BIT(_op, _bit) ((_op >> _bit) & 1)
 
 #define SET_BIT(_op, _bit, _to) ((_op & (~(1 << _bit))) | (_to << _bit))
 
