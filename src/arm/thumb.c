@@ -60,6 +60,9 @@ int thumb_exec(Arm *arm) {
       &&CHECK_PL, &&CHECK_VS, &&CHECK_VC,    &&CHECK_HI,    &&CHECK_LS,
       &&CHECK_GE, &&CHECK_LT, &&CHECK_GT,    &&CHECK_LE,    &&UNDEFINED};
 
+
+  INTERRUPT_REQUEST();
+
   THUMB_FETCH(arm->curr_instruction, arm->data_bus);
 
 DECODE:

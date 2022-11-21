@@ -1,7 +1,6 @@
 #ifndef SLIME_ARM_H
 #define SLIME_ARM_H
 #include <stdint.h>
-
 typedef enum {
   USR = 0, // user
   SYS,     // system
@@ -45,7 +44,12 @@ typedef struct Arm {
     uint32_t spsr_und;
   };
 
-  // SysBus *sys_bus;
+  // exception
+  int exception_gen; // shows an exception generated externally
+  int reset_pin;
+  int fiq_pin;
+  int irq_pin;
+
 } Arm;
 
 #define RESET_LOW_VECTOR 0x00000000
@@ -64,8 +68,9 @@ typedef struct Arm {
 #define UND_MODE 0b11011
 #define SYS_MODE 0b11111
 
-
 #define R14_SVC 1
+#define R14_FIQ 6
+#define R14_IRQ 1
 
 #define ARM_STATE 0
 #define THUMB_STATE 1
@@ -91,16 +96,55 @@ typedef struct Arm {
 #define SET_P_STATE(_cpsr, _state) _cpsr = (_cpsr & 0xFFFFFFDF) | (_state << 5);
 
 #define DISABLE_IRQ(_cpsr) _cpsr = (_cpsr & 0xFFFFFF7F) | (1 << 7);
+#define DISABLE_FIQ(_cpsr) _cpsr = (_cpsr & 0xFFFFFFBF) | (1 << 6);
 
 #define SWI_INSTRUCTION(_arm)                                                  \
   _arm->svc_regs[R14_SVC] = _arm->curr_instruction;                            \
   _arm->spsr_svc = _arm->cpsr;                                                 \
   SET_P_MODE(_arm->cpsr, SVC_MODE);                                            \
   _arm->mode = SVC;                                                            \
-  SET_P_STATE(_arm->cpsr, ARM_STATE);                                         \
-  _arm->state = ARM_STATE;                                                    \
+  SET_P_STATE(_arm->cpsr, ARM_STATE);                                          \
+  _arm->state = ARM_STATE;                                                     \
   DISABLE_IRQ(_arm->cpsr);                                                     \
   _arm->curr_instruction = SWI_LOW_VECTOR;
+
+#define INTERRUPT_REQUEST()                                                    \
+  if (arm->exception_gen) {                                                    \
+    arm->exception_gen = 0;                                                    \
+    if (arm->reset_pin) {                                                      \
+      arm->reset_pin = 0;                                                      \
+      arm->fiq_pin = 0;                                                        \
+      arm->irq_pin = 0;                                                        \
+      SET_P_MODE(arm->cpsr, SVC_MODE);                                         \
+      arm->mode = SVC;                                                         \
+      SET_P_STATE(arm->cpsr, ARM_STATE);                                       \
+      arm->state = ARM_STATE;                                                  \
+      DISABLE_IRQ(arm->cpsr);                                                  \
+      DISABLE_FIQ(arm->cpsr);                                                  \
+      arm->curr_instruction = RESET_LOW_VECTOR;                                \
+    } else if (arm->fiq_pin && IS_BIT_SET(arm->cpsr, 6)) {                     \
+      arm->fiq_pin = 0;                                                        \
+      arm->fiq_regs[R14_FIQ] = arm->curr_instruction + 4;                      \
+      arm->spsr_fiq = arm->cpsr;                                               \
+      SET_P_MODE(arm->cpsr, FIQ_MODE);                                         \
+      arm->mode = FIQ;                                                         \
+      SET_P_STATE(arm->cpsr, ARM_STATE);                                       \
+      arm->state = ARM_STATE;                                                  \
+      DISABLE_FIQ(arm->cpsr);                                                  \
+      DISABLE_IRQ(arm->cpsr);                                                  \
+      arm->curr_instruction = FIQ_LOW_VECTOR;                                  \
+    } else if (arm->irq_pin && IS_BIT_SET(arm->cpsr, 7)) {                     \
+      arm->irq_pin = 0;                                                        \
+      arm->irq_regs[R14_IRQ] = arm->curr_instruction + 4;                      \
+      arm->spsr_irq = arm->cpsr;                                               \
+      SET_P_MODE(arm->cpsr, IRQ_MODE);                                         \
+      arm->mode = IRQ;                                                         \
+      SET_P_STATE(arm->cpsr, ARM_STATE);                                       \
+      arm->state = ARM_STATE;                                                  \
+      DISABLE_IRQ(arm->cpsr);                                                  \
+      arm->curr_instruction = IRQ_LOW_VECTOR;                                  \
+    }                                                                          \
+  }
 
 void init_arm(Arm *arm);
 // execute a single arm mode instruction and returns cycle count
