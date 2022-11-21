@@ -805,6 +805,8 @@ DATA_PROCESS:
   // write_instruction_log(arm, "data process");
   goto END;
 SWI:
+  // TODO check implementation
+  SWI_INSTRUCTION(arm);
   write_instruction_log(arm, "swi");
   goto END;
 CONTROL:

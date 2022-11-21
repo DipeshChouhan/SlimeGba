@@ -66,6 +66,8 @@ DECODE:
 
   if ((OP_CODE & SWI_MASK) == SWI_DECODE) {
     // swi
+    SWI_INSTRUCTION(arm);
+    goto END;
   }
 
   if ((OP_CODE & COND_BRANCH_MASK) == COND_BRANCH_DECODE) {
@@ -149,6 +151,7 @@ DECODE:
   B1_INST:
     imm_value = OP_CODE & 0xFF;
     arm->general_regs[15] += ((IS_BIT_SET(imm_value, 7) * 0xFFFFFF00) << 1);
+    arm->curr_instruction = arm->general_regs[15];
     goto END;
 
   } else if ((OP_CODE & UNCOND_BRANCH_MASK) == UNCOND_BRANCH_DECODE) {
@@ -158,6 +161,7 @@ DECODE:
     if (temp == 0x0) {
       // B2
       arm->general_regs[15] += ((IS_BIT_SET(imm_value, 10) * 0xFFFFF800) << 1);
+      arm->curr_instruction = arm->general_regs[15];
       goto END;
     } else if (temp == 0x1000) {
       // BL H = 10 form
@@ -175,6 +179,7 @@ DECODE:
       // TODO check correctness
       // LR = (address of next instruction) | 1
       *arm->reg_table[reg_count + 14] = (arm->curr_instruction | 1);
+      arm->curr_instruction = arm->general_regs[15];
       goto END;
     }
 
@@ -435,6 +440,7 @@ DECODE:
     if (rn) {
       MEM_READ(address, imm_value, mem_read32);
       arm->general_regs[15] = imm_value & 0xFFFFFFFE;
+      arm->curr_instruction = arm->general_regs[15];
       address += 4;
     }
     reg_count = arm->mode * 16;

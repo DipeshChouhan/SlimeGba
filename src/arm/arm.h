@@ -48,6 +48,25 @@ typedef struct Arm {
   // SysBus *sys_bus;
 } Arm;
 
+#define RESET_LOW_VECTOR 0x00000000
+#define UNDEFINED_LOW_VECTOR 0x00000004
+#define SWI_LOW_VECTOR 0x00000008
+#define P_ABORT_LOW_VECTOR 0x0000000C
+#define DATA_ABORT_LOW_VECTOR 0x00000010
+#define IRQ_LOW_VECTOR 0x00000018
+#define FIQ_LOW_VECTOR 0x0000001C
+
+#define USER_MODE 0b10000
+#define FIQ_MODE 0b10001
+#define IRQ_MODE 0b10010
+#define SVC_MODE 0b10011
+#define ABORT_MODE 0b10111
+#define UND_MODE 0b11011
+#define SYS_MODE 0b11111
+
+
+#define R14_SVC 1
+
 #define ARM_STATE 0
 #define THUMB_STATE 1
 #define NF_BIT 31
@@ -67,6 +86,21 @@ typedef struct Arm {
 #define MEM_READ(_address, _dest, _type)                                       \
   ((Gba *)arm)->memory.address_bus = _address;                                 \
   _dest = _type(&((Gba *)arm)->memory);
+
+#define SET_P_MODE(_cpsr, _mode) _cpsr = (_cpsr & 0x1F) | _mode;
+#define SET_P_STATE(_cpsr, _state) _cpsr = (_cpsr & 0xFFFFFFDF) | (_state << 5);
+
+#define DISABLE_IRQ(_cpsr) _cpsr = (_cpsr & 0xFFFFFF7F) | (1 << 7);
+
+#define SWI_INSTRUCTION(_arm)                                                  \
+  _arm->svc_regs[R14_SVC] = _arm->curr_instruction;                            \
+  _arm->spsr_svc = _arm->cpsr;                                                 \
+  SET_P_MODE(_arm->cpsr, SVC_MODE);                                            \
+  _arm->mode = SVC;                                                            \
+  SET_P_STATE(_arm->cpsr, ARM_STATE);                                         \
+  _arm->state = ARM_STATE;                                                    \
+  DISABLE_IRQ(_arm->cpsr);                                                     \
+  _arm->curr_instruction = SWI_LOW_VECTOR;
 
 void init_arm(Arm *arm);
 // execute a single arm mode instruction and returns cycle count
