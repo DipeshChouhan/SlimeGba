@@ -29,6 +29,7 @@
 // !{IMPORTANT}
 
 // TODO check sign extending in all instructions !{IMPORTANT}
+// TODO Fix error in all Multiply instruction !{IMPORTANT}
 
 #include "arm.h"
 #include "../gba/gba.h"
@@ -101,7 +102,7 @@
 #define USMULL_NZ(_arm)                                                        \
   temp = _arm->cpsr & 0x3FFFFFFF;                                              \
   temp |= (*reg_p & 0x80000000);                                               \
-  temp |= ((*reg_p == 0) && ((result & 0xFFFFFFFF) == 0) << 30);
+  temp |= (((*reg_p == 0) && (*_arm->reg_table[rn] == 0)) << 30);
 
 #define DATA_PROCESS_RD_EQ_R15(_arm)                                           \
   if (s_bit) {                                                                 \
@@ -405,6 +406,7 @@ DECODE:
 
     rs = *arm->reg_table[reg_count + RS_C];
     rm = *arm->reg_table[reg_count + RM_C];
+    rn = reg_count + RD_C;
     s_bit = S_BIT;
 
     write_instruction_log(arm, "multiply");
@@ -1066,9 +1068,7 @@ ORR_INST:
   goto END;
 MOV_INST:
   *reg_p = shifter_operand;
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) {
-    DATA_PROCESS_NZC();
-  }
+  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(); }
 
   write_instruction_log(arm, "mov");
   goto END;
@@ -1078,9 +1078,7 @@ BIC_INST:
   goto END;
 MVN_INST:
   *reg_p = ~shifter_operand;
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) {
-    DATA_PROCESS_NZC();
-  }
+  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(); }
   goto END;
 
 LOAD_STORE_H_D_S_INSTS:
@@ -1247,16 +1245,15 @@ MUL_INST:
   }
   goto END;
 MLA_INST:
-  rn = *arm->reg_table[reg_count + RD_C];
-  *reg_p = (rm * rs) + rn;
+  *reg_p = (rm * rs) + *arm->reg_table[rn];
   if (s_bit) {
     MUL_NZ(arm);
   }
   goto END;
 UMULL_INST:
   result = (rm * rs);
-  *reg_p = result >> 32;                      // rdhi
-  *arm->reg_table[reg_count + RD_C] = result; // rdlow
+  *reg_p = result >> 32;        // rdhi
+  *arm->reg_table[rn] = result; // rdlow
   if (s_bit) {
     USMULL_NZ(arm);
   }
@@ -1274,11 +1271,10 @@ UMLAL_INST:
   // V Flag = unaffected
   // /* See "C and V flags" note */
   result = (rm * rs);
-  rn = reg_count + RD_C;
-  *reg_p = (result >> 32) + *reg_p;
+  *reg_p += (result >> 32);
   result += *arm->reg_table[rn];
-  *arm->reg_table[rn] = result;
   *reg_p += GET_BIT(result, 32);
+  *arm->reg_table[rn] = result;
   if (s_bit) {
     USMULL_NZ(arm);
   }
@@ -1286,18 +1282,17 @@ UMLAL_INST:
 SMULL_INST:
   result = (int32_t)rm * (int32_t)rs;
   *reg_p = (result >> 32);
-  *arm->reg_table[reg_count + RD_C] = result;
+  *arm->reg_table[rn] = result;
   if (s_bit) {
     USMULL_NZ(arm);
   }
   goto END;
 SMLAL_INST:
-  rn = reg_count + RD_C;
   result = (int32_t)rm * (int32_t)rs;
-  *reg_p = result + *reg_p;
+  *reg_p += (result >> 32); // rdHi
   result += *arm->reg_table[rn];
-  *arm->reg_table[rn] = result;
   *reg_p += GET_BIT(result, 32);
+  *arm->reg_table[rn] = result; // rdLo
   if (s_bit) {
     USMULL_NZ(arm);
   }
