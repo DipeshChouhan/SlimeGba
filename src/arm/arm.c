@@ -8,16 +8,16 @@
 // TODO remove checking condition passed !{DONE}
 //
 // TODO implement memory read and write change in all load and store
-// !{IMPORTANT}
-// TODO flag setting for multiply instructions
+// !{DONE Not Tested}
+// TODO flag setting for multiply instructions {DONE Not Tested}
 // TODO check flag setting for data processing instructions !{IMPORTANT}
 // TODO check overflow flag setting in subtraction !{MOST IMPORTANT}
-// TODO Check singned multiply
+// TODO Check singned multiply !{IMPORTANT}
 // TODO check msr instruction implementation !{IMPORTANT}
 // TODO set processor mode in msr instruction !{IMPORTANT}
 // TODO check when to switch between arm and thumb state in instructions
-// TODO implement B, BL correctly
-// TODO check fetch implementation ![IMPORTANT]
+// TODO implement B, BL correctly {DONE}
+// TODO check fetch implementation ![DONE Not Tested]
 // TODO check condition field implementation !{IMPORTANT}
 // TODO implement miscellaneous loads and store instructions  !{DONE - NOT
 // TESTED}
@@ -27,6 +27,9 @@
 //
 // TODO check STRBT like instruction which access as if in user mode
 // !{IMPORTANT}
+
+// TODO check sign extending in all instructions !{IMPORTANT}
+
 #include "arm.h"
 #include "../gba/gba.h"
 #include "../memory/memory.h"
@@ -64,6 +67,11 @@
   temp |= (result & 0x80000000);                                               \
   temp |= ((*reg_p == 0) << 30);                                               \
   temp |= (shifter_carry_out << 29);
+
+#define DATA_PROCESS_NZ(_nf, _zf)                                              \
+  temp = arm->cpsr & 0x3FFFFFFF;                                               \
+  temp |= (_nf & 0x80000000);                                                  \
+  temp |= ((_zf == 0) << 30);
 
 #define MUL_NZ(_arm)                                                           \
   temp = _arm->cpsr & 0x3FFFFFFF;                                              \
@@ -1017,10 +1025,8 @@ RSC_INST:
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(arm); }
   goto END;
 TST_INST:
-  result = rn & shifter_operand;
-  *reg_p = result;
-  DATA_PROCESS_NZC(arm);
-
+  *reg_p = rn & shifter_operand;
+  DATA_PROCESS_NZ(*reg_p, *reg_p);
   goto END;
 TEQ_INST:
   result = rn ^ shifter_operand;
