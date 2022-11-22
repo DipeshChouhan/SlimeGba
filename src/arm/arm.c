@@ -53,25 +53,45 @@
 #define ROTATE_IMM ((OP_CODE >> 8) & 0xF)
 #define IMM_8 (OP_CODE & 0xFF)
 
-#define DATA_PROCESS_NZCV(_arm)                                                \
-  temp = _arm->cpsr & 0xFFFFFFF;                                               \
-  temp |= (result & 0x80000000);                                               \
-  temp |= ((*reg_p == 0) << 30);                                               \
-  temp |= ((result & 0x100000000) >> 3);                                       \
+// #define DATA_PROCESS_NZCV(_arm)                                                \
+//   temp = _arm->cpsr & 0xFFFFFFF;                                               \
+//   temp |= (result & 0x80000000);                                               \
+//   temp |= ((*reg_p == 0) << 30);                                               \
+//   temp |= ((result & 0x100000000) >> 3);                                       \
+//   temp |= ((((rn & 0x80000000) == (shifter_operand & 0x80000000)) &&           \
+//             ((rn & 0x80000000) != (result & 0x80000000)))                      \
+//            << 28);
+
+#define FLAG_SETTING_NZCV(_nf, _zf, _cf)                                       \
+  temp = arm->cpsr & 0xFFFFFFF;                                                \
+  temp |= (_nf & 0x80000000);                                                  \
+  temp |= ((_zf == 0) << 30);                                                  \
+  temp |= (_cf);                                                               \
   temp |= ((((rn & 0x80000000) == (shifter_operand & 0x80000000)) &&           \
             ((rn & 0x80000000) != (result & 0x80000000)))                      \
            << 28);
 
-#define DATA_PROCESS_NZC(_arm)                                                 \
-  temp = _arm->cpsr & 0x1FFFFFFF;                                              \
-  temp |= (result & 0x80000000);                                               \
-  temp |= ((*reg_p == 0) << 30);                                               \
-  temp |= (shifter_carry_out << 29);
+#define DATA_PROCESS_NZCV()                                                    \
+  FLAG_SETTING_NZCV(result, *reg_p, (result & 0x100000000) >> 3)
 
-#define DATA_PROCESS_NZ(_nf, _zf)                                              \
+#define FLAG_SETTING_NZC(_nf, _zf, _cf)                                        \
+  temp = arm->cpsr & 0x1FFFFFFF;                                               \
+  temp |= (_nf & 0x80000000);                                                  \
+  temp |= ((_zf == 0) << 30);                                                  \
+  temp |= (_cf << 29);
+
+#define DATA_PROCESS_NZC() FLAG_SETTING_NZC(*reg_p, *reg_p, shifter_carry_out);
+
+#define FLAG_SETTING_NZ(_nf, _zf)                                              \
   temp = arm->cpsr & 0x3FFFFFFF;                                               \
   temp |= (_nf & 0x80000000);                                                  \
   temp |= ((_zf == 0) << 30);
+
+#define COMPARE_INSTS_NZC()                                                    \
+  FLAG_SETTING_NZC(result, (result & 0xFFFFFFFF), shifter_carry_out);
+
+#define COMPARE_INSTS_NZCV()                                                   \
+  FLAG_SETTING_NZCV(result, (result & 0xFFFFFFFF), (result & 0x100000000) >> 3)
 
 #define MUL_NZ(_arm)                                                           \
   temp = _arm->cpsr & 0x3FFFFFFF;                                              \
@@ -973,14 +993,12 @@ UNCONDITIONAL:
   // unpredictable
 
 AND_INST:
-  result = rn & shifter_operand;
-  *reg_p = result;
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(arm); }
+  *reg_p = rn & shifter_operand;
+  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(); }
   goto END;
 EOR_INST:
-  result = rn ^ shifter_operand;
-  *reg_p = result;
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(arm); }
+  *reg_p = rn ^ shifter_operand;
+  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(); }
   goto END;
 SUB_INST:
 
@@ -988,7 +1006,7 @@ SUB_INST:
   result = rn + shifter_operand;
   *reg_p = result;
 
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(arm); }
+  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(); }
 
   write_instruction_log(arm, "sub");
   goto END;
@@ -997,83 +1015,71 @@ RSB_INST:
   result = rn + shifter_operand;
   *reg_p = result;
 
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(arm); }
+  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(); }
   goto END;
 
 ADD_INST:
   result = rn + shifter_operand;
   *reg_p = result;
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(arm); }
+  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(); }
   write_instruction_log(arm, "add");
   goto END;
 ADC_INST:
   result = rn + shifter_operand + GET_BIT(arm->cpsr, CF_BIT);
   *reg_p = result;
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(arm); }
+  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(); }
   goto END;
 
 SBC_INST:
   shifter_operand = (~shifter_operand) + GET_BIT(arm->cpsr, CF_BIT);
   result = rn + shifter_operand;
   *reg_p = result;
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(arm); }
+  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(); }
   goto END;
 RSC_INST:
   rn = (~rn) + GET_BIT(arm->cpsr, CF_BIT);
   result = shifter_operand + rn;
   *reg_p = result;
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(arm); }
+  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(); }
   goto END;
 TST_INST:
-  *reg_p = rn & shifter_operand;
-  DATA_PROCESS_NZ(*reg_p, *reg_p);
+  result = rn & shifter_operand;
+  COMPARE_INSTS_NZC();
   goto END;
 TEQ_INST:
   result = rn ^ shifter_operand;
-  *reg_p = result;
-  DATA_PROCESS_NZC(arm);
+  COMPARE_INSTS_NZC();
   goto END;
 CMP_INST:
   shifter_operand = (~shifter_operand) + 1;
   result = rn + shifter_operand;
-  *reg_p = result;
-  DATA_PROCESS_NZCV(arm);
+  COMPARE_INSTS_NZCV();
   goto END;
 CMN_INST:
   result = rn + shifter_operand;
-  *reg_p = result;
-  DATA_PROCESS_NZCV(arm);
+  COMPARE_INSTS_NZCV();
   goto END;
 ORR_INST:
-  result = rn | shifter_operand;
-  *reg_p = result;
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(arm); }
+  *reg_p = rn | shifter_operand;
+  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(); }
 
   goto END;
 MOV_INST:
   *reg_p = shifter_operand;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) {
-
-    temp = arm->cpsr & 0x1FFFFFFF;
-    temp |= (arm->general_regs[rd] & 0x80000000);
-    temp |= ((arm->general_regs[rd] == 0) << 30);
-    temp |= (shifter_carry_out << 29);
+    DATA_PROCESS_NZC();
   }
 
   write_instruction_log(arm, "mov");
   goto END;
 BIC_INST:
-  result = rn & (~shifter_operand);
-  *reg_p = result;
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(arm); }
+  *reg_p = rn & (~shifter_operand);
+  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(); }
   goto END;
 MVN_INST:
   *reg_p = ~shifter_operand;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) {
-    temp = arm->cpsr & 0x1FFFFFFF;
-    temp |= (arm->general_regs[rd] & 0x80000000);
-    temp |= ((arm->general_regs[rd] == 0) << 30);
-    temp |= (shifter_carry_out << 29);
+    DATA_PROCESS_NZC();
   }
   goto END;
 
