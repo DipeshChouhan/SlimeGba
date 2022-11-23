@@ -23,13 +23,18 @@
 // TESTED}
 // TODO check sign extending in miscellaneous loads and store instruction
 // !{DONE}
-// TODO correct the goto LOAD_STORE_W_U_INSTS implementation !{IMPORTANT}
+// TODO correct the goto LOAD_STORE_W_U_INSTS implementation !{DONE Not Tested}
 //
 // TODO check STRBT like instruction which access as if in user mode
 // !{IMPORTANT}
 
 // TODO check sign extending in all instructions !{IMPORTANT}
-// TODO Fix error in all Multiply instruction !{IMPORTANT}
+// TODO Fix error in all Multiply instruction !{DONE check one more time}
+
+// TODO check operand calculation in decode code for all instruction formats
+// !{IMPORTANT}
+
+// TODO check overflow flag setting !{IMPORTANT}
 
 #include "arm.h"
 #include "../gba/gba.h"
@@ -1027,20 +1032,21 @@ ADD_INST:
   write_instruction_log(arm, "add");
   goto END;
 ADC_INST:
-  result = rn + shifter_operand + GET_BIT(arm->cpsr, CF_BIT);
+  
+  result = rn + shifter_operand + IS_BIT_SET(arm->cpsr, CF_BIT);
   *reg_p = result;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(); }
   goto END;
 
 SBC_INST:
-  shifter_operand = (~shifter_operand) + GET_BIT(arm->cpsr, CF_BIT);
-  result = rn + shifter_operand;
+  shifter_operand = (~shifter_operand) + 1; 
+  result = rn + shifter_operand + IS_BIT_NOT_SET(arm->cpsr, CF_BIT);
   *reg_p = result;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(); }
   goto END;
 RSC_INST:
-  rn = (~rn) + GET_BIT(arm->cpsr, CF_BIT);
-  result = shifter_operand + rn;
+  rn = (~rn) + 1;
+  result = shifter_operand + rn + IS_BIT_NOT_SET(arm->cpsr, CF_BIT);
   *reg_p = result;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(); }
   goto END;

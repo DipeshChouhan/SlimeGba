@@ -79,6 +79,7 @@ typedef struct Arm {
 #define CF_BIT 29
 #define VF_BIT 28
 #define IS_BIT_SET(_op, _bit) ((_op & (1 << _bit)) == (1 << _bit))
+#define IS_BIT_NOT_SET(_op, _bit) ((_op & (1 << _bit)) != (1 << _bit))
 #define ROTATE_RIGHT32(_op, _ror) ((_op >> _ror) | (_op << (32 - _ror)))
 
 #define GET_BIT(_op, _bit) ((_op >> _bit) & 1)
