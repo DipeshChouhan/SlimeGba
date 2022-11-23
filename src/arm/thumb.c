@@ -2,6 +2,7 @@
 // TODO - check sign extending in Branch instruction !{IMPORTANT}
 // TODO - check instruction fetch
 // TESTED}
+// TODO check ASR instructions
 #include "arm.h"
 #include "thumb_inst_decode.h"
 #include <assert.h>
@@ -490,8 +491,7 @@ LSL1:
   if (imm_value == 0) {
     *reg_p = rm;
   } else {
-    arm->cpsr |=
-        (arm->cpsr & (~0x20000000)) | (IS_BIT_SET(rm, (32 - imm_value)) << 29);
+    FLAG_C(IS_BIT_SET(rm, (32-imm_value)));
     *reg_p = rm << imm_value;
   }
   FLAGS_NZ(*reg_p, *reg_p);
@@ -542,13 +542,12 @@ LSL2:
     // unaffected
   } else if (imm_value < 32) {
 
-    arm->cpsr |= (arm->cpsr & (~0x20000000)) |
-                 (IS_BIT_SET(*reg_p, (32 - imm_value)) << 29);
+    FLAG_C(IS_BIT_SET(*reg_p, (32 - imm_value)));
     *reg_p = *reg_p << imm_value;
 
   } else if (imm_value == 32) {
 
-    arm->cpsr |= (arm->cpsr & (~0x20000000)) | (IS_BIT_SET(*reg_p, 0) << 29);
+    FLAG_C((*reg_p & 1));
     *reg_p = 0;
 
   } else {
@@ -556,6 +555,7 @@ LSL2:
     *reg_p = 0;
   }
   FLAGS_NZ(*reg_p, *reg_p);
+  goto END;
 LSR2:
 
   imm_value = rm & 0xFF;
@@ -573,6 +573,7 @@ LSR2:
     *reg_p = 0;
   }
   FLAGS_NZ(*reg_p, *reg_p);
+  goto END;
 ASR2:
   rm = rm & 0xFF;
   if (rm == 0) {
@@ -595,19 +596,22 @@ ADC:
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, rm);
   *reg_p = result;
 SBC:
-  rm = (~rm) + IS_BIT_SET(arm->cpsr, CF_BIT);
-  result = *reg_p + rm;
+  rm = (~rm)  + 1;
+  result = *reg_p + rm + IS_BIT_NOT_SET(arm->cpsr, CF_BIT);
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, rm);
   *reg_p = result;
 ROR:
   if ((rm & 0xFF) == 0) {
 
   } else if ((rm & 0xF) == 0) {
-
+    FLAG_C(IS_BIT_SET(*reg_p, 31));
   } else {
     rm = rm & 0xF;
+    FLAG_C(IS_BIT_SET(*reg_p, (rm - 1)));
     *reg_p = ROTATE_RIGHT32(*reg_p, rm);
   }
+  FLAGS_NZ(*reg_p, *reg_p);
+  goto END;
 TST:
   result = *reg_p & rm;
   FLAGS_NZ(result, (result & 0xFFFFFFFF));
