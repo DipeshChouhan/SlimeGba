@@ -3,6 +3,7 @@
 // TODO - check instruction fetch
 // TESTED}
 // TODO check ASR instructions
+// TODO check branching is Rd is PC
 #include "arm.h"
 #include "thumb_inst_decode.h"
 #include <assert.h>
@@ -516,10 +517,10 @@ LSR1:
 ASR1:
   if (imm_value == 0) {
     FLAG_C(IS_BIT_SET(rm, 31));
-    if (!IS_BIT_SET(rm, 31)) {
-      *reg_p = 0;
-    } else {
+    if (IS_BIT_SET(rm, 31)) {
       *reg_p = 0xFFFFFFFF;
+    } else {
+      *reg_p = 0;
     }
   } else {
     FLAG_C(IS_BIT_SET(rm, (imm_value - 1)));
@@ -654,6 +655,9 @@ SUB4:
   *reg_p = *reg_p + (~imm_value) + 1;
 ADD4:
   *reg_p = *reg_p + rm;
+  if (reg_p == arm->reg_table[15]) {
+    arm->curr_instruction = *reg_p;
+  }
   goto END;
 CMP3:
   rm = (~rm) + 1;
@@ -661,6 +665,10 @@ CMP3:
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, rm);
 MOV3:
   *reg_p = rm;
+  if (reg_p == arm->reg_table[15]) {
+    arm->curr_instruction = *reg_p;
+  }
+  goto END;
 CPY:
 UNDEFINED:
 END:
