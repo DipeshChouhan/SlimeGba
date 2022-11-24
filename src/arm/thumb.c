@@ -1,4 +1,4 @@
-// TODO - Implement flag setting for data processing instructions !{DONE NOT
+// TODO - Implement flag setting for data processing instructions !{DONE NOT TESTED}
 // TODO - check sign extending in Branch instruction !{IMPORTANT}
 // TODO - check instruction fetch
 // TESTED}
@@ -156,7 +156,7 @@ DECODE:
   B1_INST:
     imm_value = OP_CODE & 0xFF;
     arm->general_regs[15] += ((IS_BIT_SET(imm_value, 7) * 0xFFFFFF00) << 1);
-    arm->curr_instruction = arm->general_regs[15];
+    arm->curr_instruction = arm->general_regs[15] & 0xFFFFFFFE;
     goto END;
 
   } else if ((OP_CODE & UNCOND_BRANCH_MASK) == UNCOND_BRANCH_DECODE) {
@@ -166,7 +166,7 @@ DECODE:
     if (temp == 0x0) {
       // B2
       arm->general_regs[15] += ((IS_BIT_SET(imm_value, 10) * 0xFFFFF800) << 1);
-      arm->curr_instruction = arm->general_regs[15];
+      arm->curr_instruction = arm->general_regs[15] & 0xFFFFFFFE;
       goto END;
     } else if (temp == 0x1000) {
       // BL H = 10 form
@@ -184,13 +184,18 @@ DECODE:
       // TODO check correctness
       // LR = (address of next instruction) | 1
       *arm->reg_table[reg_count + 14] = (arm->curr_instruction | 1);
-      arm->curr_instruction = arm->general_regs[15];
+      arm->curr_instruction = arm->general_regs[15] & 0xFFFFFFFE;
       goto END;
     }
 
     goto UNDEFINED;
 
   } else if ((OP_CODE & BRANCH_EXCHANGE_MASK) == BRANCH_EXCHANGE_DECODE) {
+    rm = arm->general_regs[(OP_CODE >> 3) & 7];
+    arm->cpsr = (arm->cpsr & 0xFFFFFFDF) | ((rm & 1) << 5);
+    arm->mode = rm & 1;
+    arm->curr_instruction = rm & 0xFFFFFFFE;
+    goto END;
 
   } else if ((OP_CODE & DATA_PROCESS_F1_MASK) == DATA_PROCESS_F1_DECODE) {
     if (IS_BIT_SET(OP_CODE, 9)) {
@@ -656,7 +661,7 @@ SUB4:
 ADD4:
   *reg_p = *reg_p + rm;
   if (reg_p == arm->reg_table[15]) {
-    arm->curr_instruction = *reg_p;
+    arm->curr_instruction = *reg_p & 0xFFFFFFFE;
   }
   goto END;
 CMP3:
@@ -666,7 +671,7 @@ CMP3:
 MOV3:
   *reg_p = rm;
   if (reg_p == arm->reg_table[15]) {
-    arm->curr_instruction = *reg_p;
+    arm->curr_instruction = *reg_p & 0xFFFFFFFE;
   }
   goto END;
 CPY:
