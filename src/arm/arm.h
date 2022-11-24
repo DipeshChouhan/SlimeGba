@@ -1,6 +1,7 @@
 #ifndef SLIME_ARM_H
 #define SLIME_ARM_H
 #include <stdint.h>
+// CAUTION: Do not change the sequence in Mode enum
 typedef enum {
   USR = 0, // user
   SYS,     // system

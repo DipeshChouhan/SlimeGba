@@ -1,4 +1,5 @@
 #include "memory.h"
+#include <stdio.h>
 
 /*General Internal Memory
   00000000-00003FFF   BIOS - System ROM         (16 KBytes)
@@ -113,6 +114,7 @@ void mem_write16(Memory *mem) {
     // OAM- OBJ Attributes
     MEM_WRITE16(mem->oam);
   } else if (mem->address_bus >= 0x8000000 && mem->address_bus <= 0x9FFFFFF) {
+    
 
   } else if (mem->address_bus >= 0xA000000 && mem->address_bus <= 0xBFFFFFF) {
 

@@ -13,8 +13,8 @@
 // TODO check flag setting for data processing instructions !{IMPORTANT}
 // TODO check overflow flag setting in subtraction !{MOST IMPORTANT}
 // TODO Check singned multiply !{IMPORTANT}
-// TODO check msr instruction implementation !{IMPORTANT}
-// TODO set processor mode in msr instruction !{IMPORTANT}
+// TODO check msr instruction implementation !{Done}
+// TODO set processor mode in msr instruction !{Done}
 // TODO check when to switch between arm and thumb state in instructions
 // TODO implement B, BL correctly {DONE}
 // TODO check fetch implementation ![DONE Not Tested]
@@ -915,6 +915,7 @@ CONTROL:
     operand = *arm->reg_table[reg_count + RM_C];
   } else {
     // error undefined opcode
+    goto UNDEFINED;
   }
 
   // bit mask constants for arm v4T
@@ -957,6 +958,37 @@ CONTROL:
       mask = byte_mask & user_mask;
     }
     arm->cpsr = (arm->cpsr & (~mask)) | (operand & mask);
+    // set state, mode
+    arm->state = IS_BIT_SET(arm->cpsr, 5);
+    switch(arm->cpsr & 0x1F) {
+      case 0b10000:
+        arm->mode = USR;
+        break;
+      case 0b10001:
+        arm->mode = FIQ;
+        break;
+        
+      case 0b10010:
+        arm->mode = IRQ;
+        break;
+      case 0b10011:
+        arm->mode = SVC;
+        break;
+      case 0b10111:
+        arm->mode = ABT;
+        break;
+
+      case 0b11011:
+        arm->mode = UND;
+        break;
+
+      case 0b11111:
+        arm->mode = SYS;
+        break;
+      dedefault:
+        // error
+        break;
+    }
   }
 
 #undef operand
