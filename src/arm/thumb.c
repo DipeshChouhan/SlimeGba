@@ -155,7 +155,8 @@ DECODE:
 
   B1_INST:
     imm_value = OP_CODE & 0xFF;
-    arm->general_regs[15] += ((IS_BIT_SET(imm_value, 7) * 0xFFFFFF00) << 1);
+    imm_value |= (IS_BIT_SET(imm_value, 7) * 0xFFFFFF00);   // sign extending
+    arm->general_regs[15] += (imm_value << 1);
     arm->curr_instruction = arm->general_regs[15];
     goto END;
 
@@ -165,15 +166,17 @@ DECODE:
     imm_value = (OP_CODE & 0x7FF); // signed_immed_11
     if (temp == 0x0) {
       // B2
-      arm->general_regs[15] += ((IS_BIT_SET(imm_value, 10) * 0xFFFFF800) << 1);
+      imm_value = SIGN_EXTEND(imm_value, 10);
+      arm->general_regs[15] += (imm_value << 1);
       arm->curr_instruction = arm->general_regs[15];
       goto END;
     } else if (temp == 0x1000) {
       // BL H = 10 form
+      imm_value = SIGN_EXTEND(imm_value, 10);
       reg_count = arm->mode * 16;
       *arm->reg_table[reg_count + 14] =
           arm->general_regs[15] +
-          ((IS_BIT_SET(imm_value, 10) * 0xFFFFF800) << 12);
+          (imm_value << 12);
 
       goto END;
     } else if (temp == 0x1800) {
@@ -395,12 +398,14 @@ DECODE:
 
   } else if (temp == LDRSB_DECODE) {
     MEM_READ(address, imm_value, mem_read8);
-    RD_F1 |= (IS_BIT_SET(imm_value, 7) * 0xFFFFFF00);
+    imm_value = SIGN_EXTEND(imm_value, 7);
+    RD_F1 = imm_value;
     goto END;
 
   } else if (temp == LDRSH_DECODE) {
     MEM_READ(address, imm_value, mem_read16);
-    RD_F1 |= (IS_BIT_SET(imm_value, 15) * 0xFFFF0000);
+    imm_value = SIGN_EXTEND(imm_value, 15);
+    RD_F1 = imm_value;
     goto END;
   } else if (temp == PUSH) {
     imm_value = immed_8; // reg list

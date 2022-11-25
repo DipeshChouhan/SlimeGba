@@ -94,6 +94,8 @@ typedef struct Arm {
   ((Gba *)arm)->memory.address_bus = _address;                                 \
   _dest = _type(&((Gba *)arm)->memory);
 
+#define SIGN_EXTEND(_value, _bit) (_value | (IS_BIT_SET(_value, _bit) * (0xFFFFFFFF << (_bit + 1))));
+
 #define SET_P_MODE(_cpsr, _mode) _cpsr = (_cpsr & 0x1F) | _mode;
 #define SET_P_STATE(_cpsr, _state) _cpsr = (_cpsr & 0xFFFFFFDF) | (_state << 5);
 
