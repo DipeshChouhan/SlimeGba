@@ -230,12 +230,13 @@ void init_arm(Arm *arm) {
     printf("IS_BIT_SET Failed #1\n");
     exit(1);
   }
-  if (!IS_BIT_SET(0x8800FF30, 31)) {
+  printf("%d\n", IS_BIT_SET(0x8800FF30, 31));
+  if (!(IS_BIT_SET(0x8800FF30, 31))) {
     printf("IS_BIT_SET Failed #2\n");
     exit(1);
   }
-  if (!IS_BIT_SET(0x0, 31)) {
-    printf("IS_BIT_SET Failed #2\n");
+  if (IS_BIT_SET(0x0, 31)) {
+    printf("IS_BIT_SET Failed #3\n");
     exit(1);
   }
 #endif
