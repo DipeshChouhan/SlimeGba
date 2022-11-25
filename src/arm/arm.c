@@ -10,15 +10,15 @@
 // TODO implement memory read and write change in all load and store
 // !{DONE Not Tested}
 // TODO flag setting for multiply instructions {DONE Not Tested}
-// TODO check flag setting for data processing instructions !{IMPORTANT}
-// TODO check overflow flag setting in subtraction !{MOST IMPORTANT}
-// TODO Check singned multiply !{IMPORTANT}
+// TODO check flag setting for data processing instructions !{DONE}
+// TODO check overflow flag setting in subtraction !{DONE}
+// TODO Check singned multiply !{DONE}
 // TODO check msr instruction implementation !{Done}
 // TODO set processor mode in msr instruction !{Done}
 // TODO check when to switch between arm and thumb state in instructions
 // TODO implement B, BL correctly {DONE}
 // TODO check fetch implementation ![DONE Not Tested]
-// TODO check condition field implementation !{IMPORTANT}
+// TODO check condition field implementation !{DONE Not Tested}
 // TODO implement miscellaneous loads and store instructions  !{DONE - NOT
 // TESTED}
 // TODO check sign extending in miscellaneous loads and store instruction
@@ -26,15 +26,15 @@
 // TODO correct the goto LOAD_STORE_W_U_INSTS implementation !{DONE Not Tested}
 //
 // TODO check STRBT like instruction which access as if in user mode
-// !{IMPORTANT}
+// !{IMPORTANT - Research Required}
 
-// TODO check sign extending in all instructions !{IMPORTANT}
+// TODO check sign extending in all instructions !{DONE}
 // TODO Fix error in all Multiply instruction !{DONE check one more time}
 
 // TODO check operand calculation in decode code for all instruction formats
 // !{IMPORTANT}
 
-// TODO check overflow flag setting !{IMPORTANT}
+// TODO check overflow flag setting !{DONE}
 
 #include "arm.h"
 #include "../gba/gba.h"
@@ -414,7 +414,7 @@ DECODE:
     rn = reg_count + RD_C;
     s_bit = S_BIT;
 
-    write_instruction_log(arm, "multiply");
+    write_decoder_log(arm, "multiply instruction");
     goto *mul_inst_table[temp];
   } else if ((OP_CODE & LOAD_STORE_H_D_S_MASK) == LOAD_STORE_H_D_S_DECODE) {
     // Load and store halfword or doubleword, and load signed byte instructions
@@ -511,7 +511,7 @@ LOAD_STORE_H_D_S:
     }
   }
 
-  write_instruction_log(arm, "load_store_h_d_s");
+  write_decoder_log(arm, "load_store_h_d_s");
   goto LOAD_STORE_H_D_S_INSTS;
 LOAD_STORE_W_U:
 #define OFFSET_12 (OP_CODE & 0xFFF)
@@ -670,8 +670,8 @@ LOAD_STORE_W_U:
     goto LOAD_STORE_W_U_INSTS;
   }
 
+  goto UNDEFINED;
 #undef OFFSET_12
-  write_instruction_log(arm, "load_store_w_u");
 
 LOAD_STORE_M:
 #define reg_list shift_imm
@@ -719,7 +719,7 @@ LOAD_STORE_M:
     }
   }
 
-  write_instruction_log(arm, "load_store_m");
+  write_decoder_log(arm, "load_store_m");
 
   goto LOAD_STORE_M_INSTS;
 #undef reg_list
@@ -728,6 +728,7 @@ LOAD_STORE_M:
 #undef end_address
 DATA_PROCESS:
 
+  write_decoder_log(arm, "data process");
   // shifter operand processing
 
 #define ROTATE_IMM ((OP_CODE >> 8) & 0xF)
@@ -877,14 +878,14 @@ DATA_PROCESS:
     goto *dp_inst_table[INST_OPCODE];
   }
 
-  // write_instruction_log(arm, "data process");
   goto END;
 SWI:
   // TODO check implementation
   SWI_INSTRUCTION(arm);
-  write_instruction_log(arm, "swi");
+  write_decoder_log(arm, "swi");
   goto END;
 CONTROL:
+  write_decoder_log(arm, "control");
 #define operand shifter_operand
   reg_count = arm->mode * 16;
   if ((OP_CODE & BX_MASK) == BX_DECODE) {
@@ -960,34 +961,34 @@ CONTROL:
     arm->cpsr = (arm->cpsr & (~mask)) | (operand & mask);
     // set state, mode
     arm->state = IS_BIT_SET(arm->cpsr, 5);
-    switch(arm->cpsr & 0x1F) {
-      case 0b10000:
-        arm->mode = USR;
-        break;
-      case 0b10001:
-        arm->mode = FIQ;
-        break;
-        
-      case 0b10010:
-        arm->mode = IRQ;
-        break;
-      case 0b10011:
-        arm->mode = SVC;
-        break;
-      case 0b10111:
-        arm->mode = ABT;
-        break;
+    switch (arm->cpsr & 0x1F) {
+    case 0b10000:
+      arm->mode = USR;
+      break;
+    case 0b10001:
+      arm->mode = FIQ;
+      break;
 
-      case 0b11011:
-        arm->mode = UND;
-        break;
+    case 0b10010:
+      arm->mode = IRQ;
+      break;
+    case 0b10011:
+      arm->mode = SVC;
+      break;
+    case 0b10111:
+      arm->mode = ABT;
+      break;
 
-      case 0b11111:
-        arm->mode = SYS;
-        break;
-      dedefault:
-        // error
-        break;
+    case 0b11011:
+      arm->mode = UND;
+      break;
+
+    case 0b11111:
+      arm->mode = SYS;
+      break;
+    dedefault:
+      // error
+      break;
     }
   }
 
@@ -1002,7 +1003,6 @@ CONTROL:
 #undef fieldmask_bit1
 #undef fieldmask_bit2
 #undef fieldmask_bit3
-  write_instruction_log(arm, "control");
   goto END;
 BRANCH_LINK:
 
@@ -1017,17 +1017,17 @@ BRANCH_LINK:
   }
   arm->general_regs[R_15] += shifter_operand;
   arm->curr_instruction = arm->general_regs[R_15];
-  write_instruction_log(arm, "branch_link");
+  write_decoder_log(arm, "branch_link");
   goto END;
 COPROCESSOR:
-  write_instruction_log(arm, "coprocessor");
+  write_decoder_log(arm, "coprocessor");
   goto END;
 UNDEFINED:
-  write_instruction_log(arm, "undefined");
+  write_decoder_log(arm, "undefined");
   goto END;
 
 UNCONDITIONAL:
-  printf("UNCONDITIONAL\n");
+  write_decoder_log(arm, "unconditional");
   goto END;
   // unpredictable
 
@@ -1047,7 +1047,7 @@ SUB_INST:
 
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(); }
 
-  write_instruction_log(arm, "sub");
+  // write_instruction_log(arm, "sub");
   goto END;
 RSB_INST:
   rn = (~rn) + 1;
@@ -1061,7 +1061,7 @@ ADD_INST:
   result = rn + shifter_operand;
   *reg_p = result;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(); }
-  write_instruction_log(arm, "add");
+  // write_instruction_log(arm, "add");
   goto END;
 ADC_INST:
 
@@ -1108,7 +1108,7 @@ MOV_INST:
   *reg_p = shifter_operand;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(); }
 
-  write_instruction_log(arm, "mov");
+  // write_instruction_log(arm, "mov");
   goto END;
 BIC_INST:
   *reg_p = rn & (~shifter_operand);
@@ -1132,14 +1132,14 @@ LOAD_STORE_H_D_S_INSTS:
     // shifter_operand = arm_read(ls_address) & 0xFF;
     ARM_READ(ls_address, shifter_operand, mem_read8);
     shifter_operand = SIGN_EXTEND(shifter_operand, 7);
-        
+
     *arm->reg_table[reg_count] = shifter_operand;
 
   } else if (temp == LDRSH_DECODE) {
     // shifter_operand = arm_read(ls_address) & 0xFFFF;
     ARM_READ(ls_address, shifter_operand, mem_read16);
     shifter_operand = SIGN_EXTEND(shifter_operand, 15);
-        
+
     *arm->reg_table[reg_count] = shifter_operand;
 
   } else if (temp == STRH_DECODE) {
@@ -1150,6 +1150,7 @@ LOAD_STORE_H_D_S_INSTS:
 
 LOAD_STORE_W_U_T_INSTS:
 
+  write_decoder_log(arm, "LOAD_STORE_W_U_T_INSTS");
   // Instructions can be LDRBT, LDRT, STRBT, STRT
   temp = OP_CODE & 0x1700000;
   reg_p = arm->reg_table[reg_count + RD_C];
@@ -1173,6 +1174,7 @@ LOAD_STORE_W_U_T_INSTS:
 
 LOAD_STORE_W_U_INSTS:
 
+  write_decoder_log(arm, "LOAD_STORE_W_U_INSTS");
   // Instructions can be LDR, LDRB, STR, STRB
   temp = OP_CODE & 0x500000;
   rd = RD_C;
@@ -1318,6 +1320,7 @@ UMLAL_INST:
   }
   goto END;
 SMULL_INST:
+  // TODO: make sure it is correct
   result = (int32_t)rm * (int32_t)rs;
   *reg_p = (result >> 32);
   *arm->reg_table[rn] = result;

@@ -25,6 +25,11 @@ void create_json_log_file(char *bin_file_name) {
   disassembler.json_log_file = file;
 }
 
+void write_decoder_log(Arm *arm, char *name) {
+  cJSON *decode_str = cJSON_CreateString(name);
+  cJSON_AddItemToArray(disassembler.json_arr, decode_str);
+}
+
 void write_instruction_log(Arm *arm, char *name) {
 
   cJSON *inst = cJSON_CreateObject();
