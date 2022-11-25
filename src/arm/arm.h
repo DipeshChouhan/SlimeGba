@@ -2,8 +2,7 @@
 #define SLIME_ARM_H
 #include <stdint.h>
 // CAUTION: Do not change the sequence in Mode enum
-typedef enum {
-  USR = 0, // user
+typedef enum { USR = 0, // user
   SYS,     // system
   IRQ,     // interrupt
   SVC,     // supervisor
@@ -98,11 +97,14 @@ typedef struct Arm {
 
 #define SIGN_EXTEND(_value, _bit) (_value | (IS_BIT_SET(_value, _bit) * (0xFFFFFFFF << (_bit + 1))));
 
-#define SET_P_MODE(_cpsr, _mode) _cpsr = (_cpsr & 0x1F) | _mode;
-#define SET_P_STATE(_cpsr, _state) _cpsr = (_cpsr & 0xFFFFFFDF) | (_state << 5);
+#define SET_BIT(_op, _bit, _to) ((_op & (~(1 << _bit))) | (_to << _bit))
 
-#define DISABLE_IRQ(_cpsr) _cpsr = (_cpsr & 0xFFFFFF7F) | (1 << 7);
-#define DISABLE_FIQ(_cpsr) _cpsr = (_cpsr & 0xFFFFFFBF) | (1 << 6);
+#define SET_P_MODE(_cpsr, _mode) _cpsr = (_cpsr & 0x1F) | _mode;
+
+#define SET_P_STATE(_cpsr, _state) _cpsr = SET_BIT(_cpsr, 5, _state);
+
+#define DISABLE_IRQ(_cpsr) _cpsr = SET_BIT(_cpsr, 7, 1);
+#define DISABLE_FIQ(_cpsr) _cpsr = SET_BIT(_cpsr, 6, 1);
 
 #define SWI_INSTRUCTION(_arm)                                                  \
   _arm->svc_regs[R14_SVC] = _arm->curr_instruction;                            \

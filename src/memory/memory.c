@@ -1,5 +1,6 @@
 #include "memory.h"
 #include <stdio.h>
+// TODO correct memory accessing implementation
 
 /*General Internal Memory
   00000000-00003FFF   BIOS - System ROM         (16 KBytes)

@@ -68,6 +68,7 @@
 //             ((rn & 0x80000000) != (result & 0x80000000)))                      \
 //            << 28);
 
+// TODO: 
 #define FLAG_SETTING_NZCV(_nf, _zf, _cf)                                       \
   temp = arm->cpsr & 0xFFFFFFF;                                                \
   temp |= (_nf & 0x80000000);                                                  \
@@ -119,7 +120,6 @@
     }                                                                          \
   }
 
-#define SET_BIT(_op, _bit, _to) ((_op & (~(1 << _bit))) | (_to << _bit))
 
 #define OP_CODE arm->data_bus
 
@@ -204,6 +204,10 @@ void init_arm(Arm *arm) {
   }
 
   arm->cpsr = 0;
+  arm->exception_gen = 0;
+  arm->reset_pin = 0;
+  arm->irq_pin = 0;
+  arm->fiq_pin = 0;
   arm->spsr_fiq = 0;
   arm->spsr_abt = 0;
   arm->spsr_irq = 0;
@@ -215,30 +219,44 @@ void init_arm(Arm *arm) {
   // all global test goes here
 #ifdef DEBUG_ON
   uint32_t test_val = ROTATE_RIGHT32(0x3F, 0xE * 2);
-  if (test_val != 0x3F0) {
-    printf("ROTATE_RIGHT32 Failed #1\n");
-    exit(1);
-  }
-  test_val = ROTATE_RIGHT32(0xFC, 0xF * 2);
-  if (test_val != 0x3F0) {
+  uint64_t test_val64 = 0;
+  assert(ROTATE_RIGHT32(0x3F, 0xE * 2) == 0x3F0);
+  assert(ROTATE_RIGHT32(0xFC, 0xF * 2) == 0x3F0);
 
-    printf("ROTATE_RIGHT32 Failed #2\n");
-    exit(1);
-  }
+  assert(IS_BIT_SET(0xFF30, 10) == 1);
+  assert(IS_BIT_SET(0x8800FF30, 31) == 1);
+  assert(IS_BIT_SET(0x0, 31) == 0);
 
-  if (!IS_BIT_SET(0xFF30, 10)) {
-    printf("IS_BIT_SET Failed #1\n");
-    exit(1);
-  }
-  printf("%d\n", IS_BIT_SET(0x8800FF30, 31));
-  if (!(IS_BIT_SET(0x8800FF30, 31))) {
-    printf("IS_BIT_SET Failed #2\n");
-    exit(1);
-  }
-  if (IS_BIT_SET(0x0, 31)) {
-    printf("IS_BIT_SET Failed #3\n");
-    exit(1);
-  }
+  assert(IS_BIT_NOT_SET(0xFF30, 10) == 0);
+  assert(IS_BIT_NOT_SET(0x8800FF30, 31) == 0);
+  assert(IS_BIT_NOT_SET(0x0, 31) == 1);
+
+  test_val = 0x8800FF30;
+  assert(SET_BIT(test_val, 31, 0) == 0x800FF30);
+
+  assert(SET_BIT(test_val, 28, 1) == 0x9800FF30);
+
+  test_val = 0x0;
+  assert(SET_BIT(test_val, 31, 1) == 0x80000000);
+
+  test_val64 = 0x259840FF30;
+  assert(GET_BIT(test_val64, 37) == 1);
+  assert(GET_BIT(test_val64, 0) == 0);
+  assert(GET_BIT(test_val64, 32) == 1);
+  test_val = arm->cpsr;
+  test_val = SET_BIT(test_val, 7, 1);
+  assert(IS_BIT_SET(test_val, 7) == 1);
+  test_val = SET_BIT(test_val, 6, 1);
+  assert(IS_BIT_SET(test_val, 6));
+  test_val = SET_BIT(test_val, 7, 0);
+  assert(IS_BIT_NOT_SET(test_val, 7) == 1);
+
+  test_val = arm->cpsr;
+  DISABLE_FIQ(test_val);
+  assert(IS_BIT_SET(test_val,6) == 1);
+  DISABLE_IRQ(test_val);
+  assert(IS_BIT_NOT_SET(test_val, 7) == 0);
+
 #endif
 }
 
