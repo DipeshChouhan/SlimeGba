@@ -1131,15 +1131,15 @@ LOAD_STORE_H_D_S_INSTS:
   } else if (temp == LDRSB_DECODE) {
     // shifter_operand = arm_read(ls_address) & 0xFF;
     ARM_READ(ls_address, shifter_operand, mem_read8);
-    shifter_operand =
-        shifter_operand | (IS_BIT_SET(shifter_operand, 7) * 0xFFFFFF00);
+    shifter_operand = SIGN_EXTEND(shifter_operand, 7);
+        
     *arm->reg_table[reg_count] = shifter_operand;
 
   } else if (temp == LDRSH_DECODE) {
     // shifter_operand = arm_read(ls_address) & 0xFFFF;
     ARM_READ(ls_address, shifter_operand, mem_read16);
-    shifter_operand =
-        shifter_operand | (IS_BIT_SET(shifter_operand, 15) * 0xFFFF0000);
+    shifter_operand = SIGN_EXTEND(shifter_operand, 15);
+        
     *arm->reg_table[reg_count] = shifter_operand;
 
   } else if (temp == STRH_DECODE) {
