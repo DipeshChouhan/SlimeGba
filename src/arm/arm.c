@@ -204,6 +204,10 @@ void init_arm(Arm *arm) {
   }
 
   arm->cpsr = 0;
+  arm->exception_gen = 0;
+  arm->reset_pin = 0;
+  arm->irq_pin = 0;
+  arm->fiq_pin = 0;
   arm->spsr_fiq = 0;
   arm->spsr_abt = 0;
   arm->spsr_irq = 0;

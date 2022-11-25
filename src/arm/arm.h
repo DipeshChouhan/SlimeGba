@@ -2,8 +2,7 @@
 #define SLIME_ARM_H
 #include <stdint.h>
 // CAUTION: Do not change the sequence in Mode enum
-typedef enum {
-  USR = 0, // user
+typedef enum { USR = 0, // user
   SYS,     // system
   IRQ,     // interrupt
   SVC,     // supervisor
