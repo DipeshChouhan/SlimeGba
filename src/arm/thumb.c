@@ -156,7 +156,7 @@ DECODE:
   B1_INST:
     imm_value = OP_CODE & 0xFF;
     arm->general_regs[15] += ((IS_BIT_SET(imm_value, 7) * 0xFFFFFF00) << 1);
-    arm->curr_instruction = arm->general_regs[15] & 0xFFFFFFFE;
+    arm->curr_instruction = arm->general_regs[15];
     goto END;
 
   } else if ((OP_CODE & UNCOND_BRANCH_MASK) == UNCOND_BRANCH_DECODE) {
@@ -166,7 +166,7 @@ DECODE:
     if (temp == 0x0) {
       // B2
       arm->general_regs[15] += ((IS_BIT_SET(imm_value, 10) * 0xFFFFF800) << 1);
-      arm->curr_instruction = arm->general_regs[15] & 0xFFFFFFFE;
+      arm->curr_instruction = arm->general_regs[15];
       goto END;
     } else if (temp == 0x1000) {
       // BL H = 10 form
@@ -184,17 +184,19 @@ DECODE:
       // TODO check correctness
       // LR = (address of next instruction) | 1
       *arm->reg_table[reg_count + 14] = (arm->curr_instruction | 1);
-      arm->curr_instruction = arm->general_regs[15] & 0xFFFFFFFE;
+      arm->curr_instruction = arm->general_regs[15];
       goto END;
     }
 
     goto UNDEFINED;
 
   } else if ((OP_CODE & BRANCH_EXCHANGE_MASK) == BRANCH_EXCHANGE_DECODE) {
-    rm = arm->general_regs[(OP_CODE >> 3) & 7];
+    reg_count = arm->mode * 16;
+    
+    rm = *arm->reg_table[reg_count + ((OP_CODE >> 3) & 0xF)];
     arm->cpsr = (arm->cpsr & 0xFFFFFFDF) | ((rm & 1) << 5);
     arm->mode = rm & 1;
-    arm->curr_instruction = rm & 0xFFFFFFFE;
+    arm->curr_instruction = (rm & 0xFFFFFFFE) << 1;
     goto END;
 
   } else if ((OP_CODE & DATA_PROCESS_F1_MASK) == DATA_PROCESS_F1_DECODE) {
@@ -483,16 +485,19 @@ SUB3:
   result = rn + rm;
   *reg_p = result;
   FLAGS_NZCV(*reg_p, rn, rm);
+  goto END;
 SUB1:
   imm_value = (~imm_value) + 1;
   result = rn + imm_value;
   FLAGS_NZCV((result & 0xFFFFFFFF), rn, imm_value);
   *reg_p = result;
+  goto END;
 SUB2:
   imm_value = (~imm_value) + 1;
   result = *reg_p + imm_value;
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, imm_value);
   *reg_p = result;
+  goto END;
 LSL1:
   if (imm_value == 0) {
     *reg_p = rm;
@@ -501,14 +506,17 @@ LSL1:
     *reg_p = rm << imm_value;
   }
   FLAGS_NZ(*reg_p, *reg_p);
+  goto END;
 CMP1:
   imm_value = (~imm_value) + 1;
   result = *reg_p + imm_value;
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, imm_value);
+  goto END;
 
 MOV1:
   *reg_p = imm_value;
   FLAGS_NZ(*reg_p, *reg_p);
+  goto END;
 
 LSR1:
   if (imm_value == 0) {
@@ -519,6 +527,7 @@ LSR1:
     *reg_p = rm >> imm_value;
   }
   FLAGS_NZ(*reg_p, *reg_p);
+  goto END;
 ASR1:
   if (imm_value == 0) {
     FLAG_C(IS_BIT_SET(rm, 31));
@@ -533,6 +542,7 @@ ASR1:
              (IS_BIT_SET(rm, 31) * (0xFFFFFFFF << (32 - imm_value)));
   }
   FLAGS_NZ(*reg_p, *reg_p);
+  goto END;
 
 AND:
   *reg_p = (*reg_p) & rm;
@@ -597,15 +607,18 @@ ASR2:
     }
   }
   FLAGS_NZ(*reg_p, *reg_p);
+  goto END;
 ADC:
   result = *reg_p + rm + IS_BIT_SET(arm->cpsr, CF_BIT);
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, rm);
   *reg_p = result;
+  goto END;
 SBC:
   rm = (~rm)  + 1;
   result = *reg_p + rm + IS_BIT_NOT_SET(arm->cpsr, CF_BIT);
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, rm);
   *reg_p = result;
+  goto END;
 ROR:
   if ((rm & 0xFF) == 0) {
 
@@ -621,31 +634,39 @@ ROR:
 TST:
   result = *reg_p & rm;
   FLAGS_NZ(result, (result & 0xFFFFFFFF));
+  goto END;
 NEG:
   rm = (~rm) + 1;
   result = rm;
   *reg_p = result;
   FLAGS_NZCV(*reg_p, 0, rm);
+  goto END;
 CMP2:
   rm = (~rm) + 1;
   result = *reg_p + rm;
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, rm);
+  goto END;
 
 CMN:
   result = *reg_p + rm;
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, rm);
+  goto END;
 ORR:
   *reg_p = (*reg_p) | rm;
   FLAGS_NZ(*reg_p, *reg_p);
+  goto END;
 MUL:
   *reg_p = (rm * (*reg_p));
   FLAGS_NZ(*reg_p, *reg_p);
+  goto END;
 BIC:
   *reg_p = *reg_p & (~rm);
   FLAGS_NZ(*reg_p, *reg_p);
+  goto END;
 MVN:
   *reg_p = (~rm);
   FLAGS_NZ(*reg_p, *reg_p);
+  goto END;
 ADD5:
   *reg_p = (rn & 0xFFFFFFFC) + (imm_value * 4);
   goto END;
@@ -658,6 +679,7 @@ ADD7:
 SUB4:
   imm_value <<= 2;
   *reg_p = *reg_p + (~imm_value) + 1;
+  goto END;
 ADD4:
   *reg_p = *reg_p + rm;
   if (reg_p == arm->reg_table[15]) {
@@ -668,6 +690,7 @@ CMP3:
   rm = (~rm) + 1;
   result = *reg_p + rm;
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, rm);
+  goto END;
 MOV3:
   *reg_p = rm;
   if (reg_p == arm->reg_table[15]) {
