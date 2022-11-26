@@ -634,21 +634,22 @@ LOAD_STORE_W_U:
 
   case 0x40: // ASR
     if (shift_imm == 0) {
-      s_bit = GET_BIT(rm, 31);
+      s_bit = IS_BIT_SET(rm, 31);
       if (s_bit)
         shifter_operand = 0xFFFFFFFF;
       else
         shifter_operand = 0;
     } else {
 
-      shifter_operand =
-          (rm >> shift_imm) | (s_bit * (0xFFFFFFFF << (32 - shift_imm)));
+      shifter_operand = ASR_SIGN_32(rm, shift_imm, s_bit);
+      // shifter_operand =
+      //     (rm >> shift_imm) | (s_bit * (0xFFFFFFFF << (32 - shift_imm)));
     }
     break;
 
   default:
     if (shift_imm == 0) {
-      s_bit = GET_BIT(arm->cpsr, CF_BIT);
+      s_bit = IS_BIT_SET(arm->cpsr, CF_BIT);
       shifter_operand = (s_bit << 31) | (rm >> 1);
     } else {
       shifter_operand = ROTATE_RIGHT32(rm, shift_imm);
@@ -816,8 +817,9 @@ DATA_PROCESS:
 
       shifter_carry_out = GET_BIT(rm, (shift_imm - 1));
       // Todo check arithmetic shift right
-      shifter_operand = (rm >> shift_imm) |
-                        (shifter_carry_out * (0xFFFFFFFF << (32 - shift_imm)));
+      shifter_operand = ASR_SIGN_32(rm, shift_imm, shifter_carry_out);
+      // shifter_operand = (rm >> shift_imm) |
+      //                   (shifter_carry_out * (0xFFFFFFFF << (32 - shift_imm)));
     }
     goto *dp_inst_table[INST_OPCODE];
 
@@ -872,8 +874,9 @@ DATA_PROCESS:
       shifter_operand = rm;
       shifter_carry_out = GET_BIT(arm->cpsr, CF_BIT);
     } else if (rs < 32) {
-      shifter_operand =
-          (rm >> rs) | (GET_BIT(rm, 31) * (0xFFFFFFFF << (32 - rs)));
+      shifter_operand = ASR_32(rm, rs);
+      // shifter_operand =
+      //     (rm >> rs) | (GET_BIT(rm, 31) * (0xFFFFFFFF << (32 - rs)));
       shifter_carry_out = GET_BIT(rm, (rs - 1));
     } else {
       shifter_carry_out = GET_BIT(rm, 31);

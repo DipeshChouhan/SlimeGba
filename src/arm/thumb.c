@@ -1,5 +1,5 @@
 // TODO - Implement flag setting for data processing instructions !{DONE NOT TESTED}
-// TODO - check sign extending in Branch instruction !{IMPORTANT}
+// TODO - check sign extending in Branch instruction !{DONE}
 // TODO - check instruction fetch
 // TESTED}
 // TODO check ASR instructions
@@ -32,7 +32,7 @@
   temp |= (_nf & 0x80000000);                                                  \
   temp |= ((_zf == 0) << 30);
 
-#define FLAG_C(_to) arm->cpsr |= (arm->cpsr & (~0x20000000)) | (_to << 29);
+#define FLAG_C(_to) arm->cpsr = SET_BIT(arm->cpsr, 29, _to);
 
 #define THUMB_FETCH(_address, _dest)                                           \
   MEM_READ(_address, _dest, mem_read16);                                       \
@@ -155,7 +155,7 @@ DECODE:
 
   B1_INST:
     imm_value = OP_CODE & 0xFF;
-    imm_value |= (IS_BIT_SET(imm_value, 7) * 0xFFFFFF00);   // sign extending
+    imm_value = SIGN_EXTEND(imm_value, 7);
     arm->general_regs[15] += (imm_value << 1);
     arm->curr_instruction = arm->general_regs[15];
     goto END;
@@ -543,8 +543,9 @@ ASR1:
     }
   } else {
     FLAG_C(IS_BIT_SET(rm, (imm_value - 1)));
-    *reg_p = (rm >> imm_value) |
-             (IS_BIT_SET(rm, 31) * (0xFFFFFFFF << (32 - imm_value)));
+    *reg_p = ASR_32(rm, imm_value);
+    // *reg_p = (rm >> imm_value) |
+    //          (IS_BIT_SET(rm, 31) * (0xFFFFFFFF << (32 - imm_value)));
   }
   FLAGS_NZ(*reg_p, *reg_p);
   goto END;
@@ -601,8 +602,9 @@ ASR2:
 
   } else if (rm < 32) {
     FLAG_C(IS_BIT_SET(*reg_p, (rm - 1)));
-    *reg_p =
-        (*reg_p >> rm) | (IS_BIT_SET(*reg_p, 31) * (0xFFFFFFFF << (32 - rm)));
+    *reg_p = ASR_32(*reg_p, rm);
+    // *reg_p =
+    //     (*reg_p >> rm) | (IS_BIT_SET(*reg_p, 31) * (0xFFFFFFFF << (32 - rm)));
   } else {
     FLAG_C(IS_BIT_SET(*reg_p, 31));
     if (IS_BIT_SET(*reg_p, 31)) {
