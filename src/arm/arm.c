@@ -257,6 +257,13 @@ void init_arm(Arm *arm) {
   DISABLE_IRQ(test_val);
   assert(IS_BIT_NOT_SET(test_val, 7) == 0);
 
+  assert(ASR_32(0x80000000, 10) == 0xFFE00000);
+  assert(ASR_32(0xFFFFFFFF, 5) == 0xFFFFFFFF);
+  assert(ASR_32(0xF0, 4) == 0xF);
+  assert(ASR_32(0xF0, 8) == 0x0);
+  assert(ASR_32(0x80000000, 31) == 0xFFFFFFFF);
+  assert(ASR_SIGN_32(0x80000000, 31, 1) == 0xFFFFFFFF);
+
 #endif
 }
 
