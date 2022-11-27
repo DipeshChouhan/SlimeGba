@@ -68,7 +68,7 @@
 //             ((rn & 0x80000000) != (result & 0x80000000)))                      \
 //            << 28);
 
-// TODO: 
+// TODO:
 #define FLAG_SETTING_NZCV(_nf, _zf, _cf)                                       \
   temp = arm->cpsr & 0xFFFFFFF;                                                \
   temp |= (_nf & 0x80000000);                                                  \
@@ -119,7 +119,6 @@
       arm->curr_instruction = arm->general_regs[R_15];                         \
     }                                                                          \
   }
-
 
 #define OP_CODE arm->data_bus
 
@@ -253,7 +252,7 @@ void init_arm(Arm *arm) {
 
   test_val = arm->cpsr;
   DISABLE_FIQ(test_val);
-  assert(IS_BIT_SET(test_val,6) == 1);
+  assert(IS_BIT_SET(test_val, 6) == 1);
   DISABLE_IRQ(test_val);
   assert(IS_BIT_NOT_SET(test_val, 7) == 0);
 
@@ -263,6 +262,7 @@ void init_arm(Arm *arm) {
   assert(ASR_32(0xF0, 8) == 0x0);
   assert(ASR_32(0x80000000, 31) == 0xFFFFFFFF);
   assert(ASR_SIGN_32(0x80000000, 31, 1) == 0xFFFFFFFF);
+  assert(ROTATE_RIGHT32(0x3, 8) == 0x3000000);
 
 #endif
 }
@@ -758,8 +758,6 @@ DATA_PROCESS:
   write_decoder_log(arm, "data process");
   // shifter operand processing
 
-#define ROTATE_IMM ((OP_CODE >> 8) & 0xF)
-#define IMM_8 (OP_CODE & 0xFF)
 #define INST_OPCODE ((OP_CODE >> 21) & 0xF)
   reg_count = arm->mode * 16;
   rn = *arm->reg_table[reg_count + RN_C];
@@ -775,7 +773,7 @@ DATA_PROCESS:
       shifter_carry_out = GET_BIT(arm->cpsr, CF_BIT);
     } else {
       rotate_imm *= 2;
-      shifter_operand = ROTATE_RIGHT32(IMM_8, rotate_imm);
+      shifter_operand = ROTATE_RIGHT32((unsigned int)IMM_8, rotate_imm);
       shifter_carry_out = GET_BIT(shifter_operand, 31);
     }
     goto *dp_inst_table[INST_OPCODE];
@@ -826,7 +824,8 @@ DATA_PROCESS:
       // Todo check arithmetic shift right
       shifter_operand = ASR_SIGN_32(rm, shift_imm, shifter_carry_out);
       // shifter_operand = (rm >> shift_imm) |
-      //                   (shifter_carry_out * (0xFFFFFFFF << (32 - shift_imm)));
+      //                   (shifter_carry_out * (0xFFFFFFFF << (32 -
+      //                   shift_imm)));
     }
     goto *dp_inst_table[INST_OPCODE];
 
@@ -939,7 +938,7 @@ CONTROL:
 
   } else if ((OP_CODE & MSR_IMM_MASK) == MSR_IMM_DECODE) {
     rotate_imm = ROTATE_IMM * 2;
-    operand = ROTATE_RIGHT32(IMM_8, rotate_imm);
+    operand = ROTATE_RIGHT32((unsigned int)IMM_8, rotate_imm);
 
   } else if ((OP_CODE & MSR_REG_MASK) == MSR_REG_DECODE) {
     operand = *arm->reg_table[reg_count + RM_C];
@@ -1015,7 +1014,7 @@ CONTROL:
     case 0b11111:
       arm->mode = SYS;
       break;
-    dedefault:
+    default:
       // error
       break;
     }

@@ -84,8 +84,8 @@ typedef struct Arm {
 #define IS_BIT_NOT_SET(_op, _bit) ((_op & (1 << _bit)) != (1 << _bit))
 #define ROTATE_RIGHT32(_op, _ror) ((_op >> _ror) | (_op << (32 - _ror)))
 
-#define ASR_SIGN_32(_op, _shift, _sign) ((_op >> _shift) | (_sign * (0xFFFFFFFF << (32 - _shift))))
-#define ASR_32(_op, _shift) ((_op >> _shift) | (IS_BIT_SET(_op, 31) * (0xFFFFFFFF <<  (32 - _shift))))
+#define ASR_SIGN_32(_op, _shift, _sign) ((_op >> _shift) | (_sign * (0xFFFFFFFFu << (32 - _shift))))
+#define ASR_32(_op, _shift) ((_op >> _shift) | (IS_BIT_SET(_op, 31) * (0xFFFFFFFFu <<  (32 - _shift))))
 
 #define GET_BIT(_op, _bit) ((_op >> _bit) & 1)
 
