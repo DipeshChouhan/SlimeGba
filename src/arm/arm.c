@@ -831,6 +831,7 @@ DATA_PROCESS:
 
   } else if (temp == SHIFTER_ROR_IMM_DECODE) {
 
+    // shift_imm is not zero here
     shifter_operand = ROTATE_RIGHT32(rm, shift_imm);
     shifter_carry_out = GET_BIT(rm, (shift_imm - 1));
     goto *dp_inst_table[INST_OPCODE];
@@ -893,15 +894,15 @@ DATA_PROCESS:
   } else if (temp == SHIFTER_ROR_REG_DECODE) {
 
     temp = rs & 0x1F;
-    if (rs == 0) {
+    if ((rs & 0xFF) == 0) {
       shifter_operand = rm;
-      shifter_carry_out = GET_BIT(arm->cpsr, CF_BIT);
+      shifter_carry_out = IS_BIT_SET(arm->cpsr, CF_BIT);
     } else if (temp == 0) {
       shifter_operand = rm;
-      shifter_carry_out = GET_BIT(rm, 31);
+      shifter_carry_out = IS_BIT_SET(rm, 31);
     } else {
       shifter_operand = ROTATE_RIGHT32(rm, temp);
-      shifter_carry_out = GET_BIT(rm, (temp - 1));
+      shifter_carry_out = IS_BIT_SET(rm, (temp - 1));
     }
     goto *dp_inst_table[INST_OPCODE];
   }
