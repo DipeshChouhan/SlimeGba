@@ -9,7 +9,6 @@
 #include <assert.h>
 #include <stdint.h>
 #include <stdlib.h>
-
 #include "../gba/gba.h"
 #include "../memory/memory.h"
 

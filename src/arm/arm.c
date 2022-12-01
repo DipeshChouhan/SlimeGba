@@ -770,11 +770,11 @@ DATA_PROCESS:
 
     if (rotate_imm == 0) {
       shifter_operand = IMM_8;
-      shifter_carry_out = GET_BIT(arm->cpsr, CF_BIT);
+      shifter_carry_out = IS_BIT_SET(arm->cpsr, CF_BIT);
     } else {
       rotate_imm *= 2;
       shifter_operand = ROTATE_RIGHT32((unsigned int)IMM_8, rotate_imm);
-      shifter_carry_out = GET_BIT(shifter_operand, 31);
+      shifter_carry_out = IS_BIT_SET(shifter_operand, 31);
     }
     goto *dp_inst_table[INST_OPCODE];
   }
@@ -783,12 +783,14 @@ DATA_PROCESS:
   rm = *arm->reg_table[reg_count + RM_C];
   if (temp == SHIFTER_REG_DECODE) {
     shifter_operand = rm; // TODO - change to register
-    shifter_carry_out = GET_BIT(arm->cpsr, CF_BIT);
+    shifter_carry_out = IS_BIT_SET(arm->cpsr, CF_BIT);
     goto *dp_inst_table[INST_OPCODE];
 
   } else if (temp == SHIFTER_ROR_EXTEND_DECODE) {
 
-    temp = GET_BIT(arm->cpsr, CF_BIT) << 31;
+    // shifter_operand = (C Flag Logical_Shift_Left 31) OR (Rm
+    // Logical_Shift_Right 1)
+    temp = (arm->cpsr & 0x20000000) << 2;
     shifter_operand = temp | (rm >> 1);
     shifter_carry_out = rm & 1; // bit 0
     goto *dp_inst_table[INST_OPCODE];
