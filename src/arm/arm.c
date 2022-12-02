@@ -483,15 +483,13 @@ LOAD_STORE_H_D_S:
 #define immedL shift_imm
 #define offset_8 shifter_operand
   immedL = RM_C;
-  immedH = (OP_CODE & 0xF00) >> 8;
+  immedH = (OP_CODE >> 8) & 0xF;
   reg_count = arm->mode * 16;
-  rn = RN_C;
-  reg_p = arm->reg_table[reg_count + rn];
-  rm = *arm->reg_table[reg_count + RM_C];
+  reg_p = arm->reg_table[reg_count + RN_C];
   temp = OP_CODE & LS_H_D_S_MASK;
-  offset_8 = ((immedH << 4) | immedL) & 0xFF;
   if (temp == LS_H_D_S_REG_DECODE) {
 
+    rm = *arm->reg_table[reg_count + RM_C];
     if (U_BIT) {
       ls_address = *reg_p + rm;
     } else {
@@ -499,6 +497,7 @@ LOAD_STORE_H_D_S:
     }
 
   } else if (temp == LS_H_D_S_IMM_DECODE) {
+    offset_8 = (immedH << 4) | immedL;
     if (U_BIT) {
       ls_address = *reg_p + offset_8;
     } else {
@@ -506,6 +505,7 @@ LOAD_STORE_H_D_S:
     }
 
   } else if (temp == LS_H_D_S_IMM_PR_DECODE) {
+    offset_8 = (immedH << 4) | immedL;
     if (U_BIT) {
       ls_address = *reg_p + offset_8;
     } else {
@@ -514,6 +514,7 @@ LOAD_STORE_H_D_S:
     *reg_p = ls_address;
 
   } else if (temp == LS_H_D_S_REG_PR_DECODE) {
+    rm = *arm->reg_table[reg_count + RM_C];
     if (U_BIT) {
       ls_address = *reg_p + rm;
     } else {
@@ -522,6 +523,7 @@ LOAD_STORE_H_D_S:
     *reg_p = ls_address;
 
   } else if (temp == LS_H_D_S_REG_PO_DECODE) {
+    rm = *arm->reg_table[reg_count + RM_C];
     ls_address = *reg_p;
     if (U_BIT) {
       *reg_p = *reg_p + rm;
@@ -529,6 +531,7 @@ LOAD_STORE_H_D_S:
       *reg_p = *reg_p - rm;
     }
   } else if (temp == LS_H_D_S_IMM_PO_DECODE) {
+    offset_8 = (immedH << 4) | immedL;
     ls_address = *reg_p;
     if (U_BIT) {
       *reg_p = *reg_p + offset_8;
