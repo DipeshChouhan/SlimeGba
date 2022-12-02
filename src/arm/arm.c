@@ -544,8 +544,6 @@ LOAD_STORE_W_U:
 
   rn = RN_C;
   reg_count = arm->mode * 16;
-  // reg_count = RN_C;
-  // rn = arm->general_regs[reg_count];
   reg_p = arm->reg_table[reg_count + rn];
   shifter_operand = OFFSET_12;
   temp = OP_CODE & LS_W_U_IMM_MASK;
@@ -640,12 +638,9 @@ LOAD_STORE_W_U:
     break;
 
   case 0x40: // ASR
+    s_bit = GET_BIT(rm, 31);
     if (shift_imm == 0) {
-      s_bit = IS_BIT_SET(rm, 31);
-      if (s_bit)
-        shifter_operand = 0xFFFFFFFF;
-      else
-        shifter_operand = 0;
+      shifter_operand = 0xFFFFFFFF * s_bit;
     } else {
 
       shifter_operand = ASR_SIGN_32(rm, shift_imm, s_bit);
@@ -656,8 +651,7 @@ LOAD_STORE_W_U:
 
   default:
     if (shift_imm == 0) {
-      s_bit = IS_BIT_SET(arm->cpsr, CF_BIT);
-      shifter_operand = (s_bit << 31) | (rm >> 1);
+      shifter_operand = ((arm->cpsr << 2) & 0x80000000) | (rm >> 1);
     } else {
       shifter_operand = ROTATE_RIGHT32(rm, shift_imm);
     }
@@ -685,6 +679,7 @@ LOAD_STORE_W_U:
   }
   temp = OP_CODE & LS_W_U_SCALED_REG_PO_MASK;
   if (temp == LS_W_U_SCALED_REG_PO_DECODE) {
+    ls_address = *reg_p;
     if (U_BIT) {
       *reg_p = *reg_p + shifter_operand;
     } else {
