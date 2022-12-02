@@ -483,15 +483,13 @@ LOAD_STORE_H_D_S:
 #define immedL shift_imm
 #define offset_8 shifter_operand
   immedL = RM_C;
-  immedH = (OP_CODE & 0xF00) >> 8;
+  immedH = (OP_CODE >> 8) & 0xF;
   reg_count = arm->mode * 16;
-  rn = RN_C;
-  reg_p = arm->reg_table[reg_count + rn];
-  rm = *arm->reg_table[reg_count + RM_C];
+  reg_p = arm->reg_table[reg_count + RN_C];
   temp = OP_CODE & LS_H_D_S_MASK;
-  offset_8 = ((immedH << 4) | immedL) & 0xFF;
   if (temp == LS_H_D_S_REG_DECODE) {
 
+    rm = *arm->reg_table[reg_count + RM_C];
     if (U_BIT) {
       ls_address = *reg_p + rm;
     } else {
@@ -499,6 +497,7 @@ LOAD_STORE_H_D_S:
     }
 
   } else if (temp == LS_H_D_S_IMM_DECODE) {
+    offset_8 = (immedH << 4) | immedL;
     if (U_BIT) {
       ls_address = *reg_p + offset_8;
     } else {
@@ -506,6 +505,7 @@ LOAD_STORE_H_D_S:
     }
 
   } else if (temp == LS_H_D_S_IMM_PR_DECODE) {
+    offset_8 = (immedH << 4) | immedL;
     if (U_BIT) {
       ls_address = *reg_p + offset_8;
     } else {
@@ -514,6 +514,7 @@ LOAD_STORE_H_D_S:
     *reg_p = ls_address;
 
   } else if (temp == LS_H_D_S_REG_PR_DECODE) {
+    rm = *arm->reg_table[reg_count + RM_C];
     if (U_BIT) {
       ls_address = *reg_p + rm;
     } else {
@@ -522,6 +523,7 @@ LOAD_STORE_H_D_S:
     *reg_p = ls_address;
 
   } else if (temp == LS_H_D_S_REG_PO_DECODE) {
+    rm = *arm->reg_table[reg_count + RM_C];
     ls_address = *reg_p;
     if (U_BIT) {
       *reg_p = *reg_p + rm;
@@ -529,6 +531,7 @@ LOAD_STORE_H_D_S:
       *reg_p = *reg_p - rm;
     }
   } else if (temp == LS_H_D_S_IMM_PO_DECODE) {
+    offset_8 = (immedH << 4) | immedL;
     ls_address = *reg_p;
     if (U_BIT) {
       *reg_p = *reg_p + offset_8;
@@ -544,8 +547,6 @@ LOAD_STORE_W_U:
 
   rn = RN_C;
   reg_count = arm->mode * 16;
-  // reg_count = RN_C;
-  // rn = arm->general_regs[reg_count];
   reg_p = arm->reg_table[reg_count + rn];
   shifter_operand = OFFSET_12;
   temp = OP_CODE & LS_W_U_IMM_MASK;
@@ -640,12 +641,9 @@ LOAD_STORE_W_U:
     break;
 
   case 0x40: // ASR
+    s_bit = GET_BIT(rm, 31);
     if (shift_imm == 0) {
-      s_bit = IS_BIT_SET(rm, 31);
-      if (s_bit)
-        shifter_operand = 0xFFFFFFFF;
-      else
-        shifter_operand = 0;
+      shifter_operand = 0xFFFFFFFF * s_bit;
     } else {
 
       shifter_operand = ASR_SIGN_32(rm, shift_imm, s_bit);
@@ -656,8 +654,7 @@ LOAD_STORE_W_U:
 
   default:
     if (shift_imm == 0) {
-      s_bit = IS_BIT_SET(arm->cpsr, CF_BIT);
-      shifter_operand = (s_bit << 31) | (rm >> 1);
+      shifter_operand = ((arm->cpsr << 2) & 0x80000000) | (rm >> 1);
     } else {
       shifter_operand = ROTATE_RIGHT32(rm, shift_imm);
     }
@@ -685,6 +682,7 @@ LOAD_STORE_W_U:
   }
   temp = OP_CODE & LS_W_U_SCALED_REG_PO_MASK;
   if (temp == LS_W_U_SCALED_REG_PO_DECODE) {
+    ls_address = *reg_p;
     if (U_BIT) {
       *reg_p = *reg_p + shifter_operand;
     } else {
@@ -788,23 +786,22 @@ DATA_PROCESS:
 
   } else if (temp == SHIFTER_ROR_EXTEND_DECODE) {
 
-    // shifter_operand = (C Flag Logical_Shift_Left 31) OR (Rm
-    // Logical_Shift_Right 1)
-    temp = (arm->cpsr & 0x20000000) << 2;
+    temp = (arm->cpsr << 2) & 0x80000000; // c flag << 31
     shifter_operand = temp | (rm >> 1);
     shifter_carry_out = rm & 1; // bit 0
     goto *dp_inst_table[INST_OPCODE];
   }
 
   temp = OP_CODE & SHIFTER_SHIFT_IMM_MASK;
-  shift_imm = SHIFT_IMM;
   if (temp == SHIFTER_LSL_IMM_DECODE) {
+    shift_imm = SHIFT_IMM;
 
     shifter_operand = rm << shift_imm;
     shifter_carry_out = GET_BIT(rm, (32 - shift_imm));
     goto *dp_inst_table[INST_OPCODE];
 
   } else if (temp == SHIFTER_LSR_IMM_DECODE) {
+    shift_imm = SHIFT_IMM;
     if (shift_imm == 0) {
       shifter_operand = 0;
       shifter_carry_out = GET_BIT(rm, 31);
@@ -815,6 +812,7 @@ DATA_PROCESS:
     goto *dp_inst_table[INST_OPCODE];
 
   } else if (temp == SHIFTER_ASR_IMM_DECODE) {
+    shift_imm = SHIFT_IMM;
     if (shift_imm == 0) {
 
       shifter_carry_out = GET_BIT(rm, 31);
@@ -822,9 +820,10 @@ DATA_PROCESS:
 
     } else {
 
+      shifter_operand = ASR_32(rm, shift_imm);
       shifter_carry_out = GET_BIT(rm, (shift_imm - 1));
       // Todo check arithmetic shift right
-      shifter_operand = ASR_SIGN_32(rm, shift_imm, shifter_carry_out);
+      // shifter_operand = ASR_SIGN_32(rm, shift_imm, shifter_carry_out);
       // shifter_operand = (rm >> shift_imm) |
       //                   (shifter_carry_out * (0xFFFFFFFF << (32 -
       //                   shift_imm)));
@@ -833,6 +832,7 @@ DATA_PROCESS:
 
   } else if (temp == SHIFTER_ROR_IMM_DECODE) {
 
+    shift_imm = SHIFT_IMM;
     // shift_imm is not zero here
     shifter_operand = ROTATE_RIGHT32(rm, shift_imm);
     shifter_carry_out = GET_BIT(rm, (shift_imm - 1));
@@ -896,7 +896,7 @@ DATA_PROCESS:
   } else if (temp == SHIFTER_ROR_REG_DECODE) {
 
     temp = rs & 0x1F;
-    if ((rs & 0xFF) == 0) {
+    if (rs == 0) {
       shifter_operand = rm;
       shifter_carry_out = IS_BIT_SET(arm->cpsr, CF_BIT);
     } else if (temp == 0) {
