@@ -32,7 +32,7 @@
 // TODO Fix error in all Multiply instruction !{DONE check one more time}
 
 // TODO check operand calculation in decode code for all instruction formats
-// !{IMPORTANT}
+// !{DONE}
 
 // TODO check overflow flag setting !{DONE}
 
@@ -440,18 +440,21 @@ DECODE:
     rn = reg_count + RD_C;
     s_bit = S_BIT;
 
-    write_decoder_log(arm, "multiply instruction");
+    write_decoder_log(arm, "Multiply Instruction");
     goto *mul_inst_table[temp];
   } else if ((OP_CODE & LOAD_STORE_H_D_S_MASK) == LOAD_STORE_H_D_S_DECODE) {
     // Load and store halfword or doubleword, and load signed byte instructions
+    write_decoder_log(arm, "LoadStore_H_D_S Instruction");
     goto LOAD_STORE_H_D_S;
   } else if ((OP_CODE & DATA_PROCESS_MASK) == DATA_PROCESS_DECODE) {
     // instructions can data processing, control or undefined
     if ((OP_CODE & CONTROL_MASK) != CONTROL_DECODE) {
       // instructions are data processing
+      write_decoder_log(arm, "Data Process Instruction");
       goto DATA_PROCESS;
     }
 
+    write_decoder_log(arm, "Control Instruction");
     goto CONTROL;
 
     // control instruction
@@ -459,22 +462,28 @@ DECODE:
   } else if ((OP_CODE & LOAD_STORE_W_U_MASK) == LOAD_STORE_W_U_DECODE) {
     // Load and store word or unsigned byte instructions and media instructions
     // and architecturally undefined instructions
+    write_decoder_log(arm, "LoadStore_W_U Instruction");
     goto LOAD_STORE_W_U;
   } else if ((OP_CODE & LOAD_STORE_M_MASK) == LOAD_STORE_M_DECODE) {
     // Load and Store Multiple instructions
+    write_decoder_log(arm, "LoadStore_M Instruction");
     goto LOAD_STORE_M;
   } else if ((OP_CODE & BRANCH_LINK_MASK) == BRANCH_LINK_DECODE) {
     // Branch and branch link instructions
     reg_count = (arm->mode * 16) + 14; // R14 is link register
+    write_decoder_log(arm, "Branch_Link Instruction");
     goto BRANCH_LINK;
   } else if ((OP_CODE & SWI_MASK) == SWI_DECODE) {
     // swi instruction
+    write_decoder_log(arm, "Swi Instruction");
     goto SWI;
   } else if ((OP_CODE & COPROCESSOR_MASK) == COPROCESSOR_DECODE) {
     // coprocessor instructions
+    write_decoder_log(arm, "coprocessor instruction");
     goto COPROCESSOR;
   } else {
     // undefined, unimplemented
+    write_decoder_log(arm, "undefined");
     goto UNDEFINED;
   }
 
@@ -540,7 +549,6 @@ LOAD_STORE_H_D_S:
     }
   }
 
-  write_decoder_log(arm, "load_store_h_d_s");
   goto LOAD_STORE_H_D_S_INSTS;
 LOAD_STORE_W_U:
 #define OFFSET_12 (OP_CODE & 0xFFF)
@@ -744,7 +752,6 @@ LOAD_STORE_M:
     }
   }
 
-  write_decoder_log(arm, "load_store_m");
 
   goto LOAD_STORE_M_INSTS;
 #undef reg_list
@@ -753,7 +760,6 @@ LOAD_STORE_M:
 #undef end_address
 DATA_PROCESS:
 
-  write_decoder_log(arm, "data process");
   // shifter operand processing
 
 #define INST_OPCODE ((OP_CODE >> 21) & 0xF)
@@ -913,10 +919,8 @@ DATA_PROCESS:
 SWI:
   // TODO check implementation
   SWI_INSTRUCTION(arm);
-  write_decoder_log(arm, "swi");
   goto END;
 CONTROL:
-  write_decoder_log(arm, "control");
 #define operand shifter_operand
   reg_count = arm->mode * 16;
   if ((OP_CODE & BX_MASK) == BX_DECODE) {
@@ -1048,17 +1052,13 @@ BRANCH_LINK:
   }
   arm->general_regs[R_15] += shifter_operand;
   arm->curr_instruction = arm->general_regs[R_15];
-  write_decoder_log(arm, "branch_link");
   goto END;
 COPROCESSOR:
-  write_decoder_log(arm, "coprocessor");
   goto END;
 UNDEFINED:
-  write_decoder_log(arm, "undefined");
   goto END;
 
 UNCONDITIONAL:
-  write_decoder_log(arm, "unconditional");
   goto END;
   // unpredictable
 
@@ -1205,7 +1205,6 @@ LOAD_STORE_W_U_T_INSTS:
 
 LOAD_STORE_W_U_INSTS:
 
-  write_decoder_log(arm, "LOAD_STORE_W_U_INSTS");
   // Instructions can be LDR, LDRB, STR, STRB
   temp = OP_CODE & 0x500000;
   rd = RD_C;
