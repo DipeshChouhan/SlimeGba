@@ -1,6 +1,7 @@
 #include "gba.h"
 #include "../arm/arm.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 void power_on_gba(uint8_t *rom, unsigned int rom_size) {
@@ -10,6 +11,7 @@ void power_on_gba(uint8_t *rom, unsigned int rom_size) {
   init_arm(&gba.arm);
 
   memcpy(&gba.memory.iwram, rom, rom_size);
+  free(rom);
   int index = 0;
   int total = 0;
   while (index < rom_size) {

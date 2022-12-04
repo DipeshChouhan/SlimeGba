@@ -443,7 +443,18 @@ DECODE:
     write_decoder_log(arm, "Multiply Instruction");
     goto *mul_inst_table[temp];
   } else if ((OP_CODE & LOAD_STORE_H_D_S_MASK) == LOAD_STORE_H_D_S_DECODE) {
-    // Load and store halfword or doubleword, and load signed byte instructions
+    // Load and store halfword or doubleword, and load signed byte instructions,
+    // and swp and swpb
+    
+    temp = OP_CODE & SWP_MASK;
+    if (temp == SWP_DECODE) {
+      write_decoder_log(arm, "Swp");
+      goto SWP_INST;
+    } else if (temp == SWPB_DECODE) {
+      write_decoder_log(arm, "Swpb");
+      goto SWPB_INST;
+    }
+    printf("OP_CODE %X\n", OP_CODE);
     write_decoder_log(arm, "LoadStore_H_D_S Instruction");
     goto LOAD_STORE_H_D_S;
   } else if ((OP_CODE & DATA_PROCESS_MASK) == DATA_PROCESS_DECODE) {
@@ -462,6 +473,7 @@ DECODE:
   } else if ((OP_CODE & LOAD_STORE_W_U_MASK) == LOAD_STORE_W_U_DECODE) {
     // Load and store word or unsigned byte instructions and media instructions
     // and architecturally undefined instructions
+    printf("W_U %X\n", OP_CODE);
     write_decoder_log(arm, "LoadStore_W_U Instruction");
     goto LOAD_STORE_W_U;
   } else if ((OP_CODE & LOAD_STORE_M_MASK) == LOAD_STORE_M_DECODE) {
@@ -921,9 +933,12 @@ SWI:
   SWI_INSTRUCTION(arm);
   goto END;
 CONTROL:
+
+  printf("OP_CODE: %X\n", OP_CODE);
 #define operand shifter_operand
   reg_count = arm->mode * 16;
   if ((OP_CODE & BX_MASK) == BX_DECODE) {
+    printf("BX\n");
     rm = *arm->reg_table[reg_count + RM_C];
     // T bit
     arm->cpsr = SET_BIT(arm->cpsr, 5, (rm & 1));
@@ -933,6 +948,7 @@ CONTROL:
     goto END;
 
   } else if ((OP_CODE & MRS_MASK) == MRS_DECODE) {
+    printf("MRS\n");
     reg_p = arm->reg_table[reg_count + RD_C];
     if (IS_BIT_SET(OP_CODE, 22)) {
       if (arm->mode > 1) {
@@ -944,10 +960,12 @@ CONTROL:
     goto END;
 
   } else if ((OP_CODE & MSR_IMM_MASK) == MSR_IMM_DECODE) {
+    printf("MSR_IMM\n");
     rotate_imm = ROTATE_IMM * 2;
     operand = ROTATE_RIGHT32((unsigned int)IMM_8, rotate_imm);
 
   } else if ((OP_CODE & MSR_REG_MASK) == MSR_REG_DECODE) {
+    printf("MSR_REG\n");
     operand = *arm->reg_table[reg_count + RM_C];
   } else {
     // error undefined opcode
@@ -1056,6 +1074,7 @@ BRANCH_LINK:
 COPROCESSOR:
   goto END;
 UNDEFINED:
+  printf("UNDEFINED\n");
   goto END;
 
 UNCONDITIONAL:
@@ -1187,19 +1206,23 @@ LOAD_STORE_W_U_T_INSTS:
   reg_p = arm->reg_table[reg_count + RD_C];
   if (temp == LDRBT_DECODE) {
     // *reg_p = arm_read(ls_address);
+    printf("LDRBT\n");
     ARM_READ(ls_address, *reg_p, mem_read8);
     *arm->reg_table[reg_count + RN_C] = ls_address;
 
   } else if (temp == STRBT_DECODE) {
     ARM_WRITE(ls_address, *reg_p, mem_write8);
+    printf("STRBT\n");
 
   } else if (temp == LDRT_DECODE) {
 
     // *reg_p = arm_read(ls_address);
     ARM_READ(ls_address, *reg_p, mem_read32);
+    printf("LDRT\n");
 
   } else if (temp == STRT_DECODE) {
     ARM_WRITE(ls_address, *reg_p, mem_write32);
+    printf("STRT\n");
   }
   goto END;
 
@@ -1218,16 +1241,20 @@ LOAD_STORE_W_U_INSTS:
     } else {
       *reg_p = result;
     }
+    printf("LDR\n");
 
   } else if (temp == STR_DECODE) {
     ARM_WRITE(ls_address, *reg_p, mem_write32); // word write
+    printf("STR\n");
 
   } else if (temp == LDRB_DECODE) {
     // *reg_p = arm_read(ls_address); // unsigned byte memory access
     ARM_READ(ls_address, *reg_p, mem_read8);
+    printf("LDRB\n");
 
   } else if (temp == STRB_DECODE) {
     ARM_WRITE(ls_address, *reg_p, mem_write8); // byte write
+    printf("STRB\n");
   }
   goto END;
 
@@ -1367,6 +1394,14 @@ SMLAL_INST:
   if (s_bit) {
     USMULL_NZ(arm);
   }
+  goto END;
+
+SWP_INST:
+  
+  printf("SWP_INST\n");
+  goto END;
+
+SWPB_INST:
 
 END:
   return 0;
