@@ -15,10 +15,9 @@ void power_on_gba(uint8_t *rom, unsigned int rom_size) {
   int index = 0;
   int total = 0;
   while (index < rom_size) {
-    arm_exec(&gba.arm);
-    index += 4;
+    thumb_exec(&gba.arm);
+    index += 2;
     ++total;
   }
-
   printf("called %d\n", total);
 }

@@ -8,9 +8,11 @@
 #include "../gba/gba.h"
 #include "../memory/memory.h"
 #include "arm.h"
+#include "disassembler.h"
 #include "thumb_inst_decode.h"
 #include <assert.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #define OP_CODE arm->data_bus
@@ -65,6 +67,7 @@ int thumb_exec(Arm *arm) {
   INTERRUPT_REQUEST();
 
   THUMB_FETCH(arm->curr_instruction, arm->data_bus);
+  printf("%X\n", arm->data_bus);
 
 DECODE:
 
@@ -201,40 +204,47 @@ DECODE:
     goto END;
 
   } else if ((OP_CODE & DATA_PROCESS_F1_MASK) == DATA_PROCESS_F1_DECODE) {
+    write_decoder_log(arm, "Thumb Data Processing Instruction");
+    rn = arm->general_regs[(OP_CODE >> 3) & 7];
+    rm = arm->general_regs[(OP_CODE >> 6) & 7];
+    reg_p = &arm->general_regs[OP_CODE & 7];
     if (IS_BIT_SET(OP_CODE, 9)) {
-      rn = arm->general_regs[(OP_CODE >> 3) & 7];
-      rm = arm->general_regs[(OP_CODE >> 6) & 7];
-      reg_p = &arm->general_regs[OP_CODE & 7];
       goto SUB3;
     }
     goto ADD3;
 
   } else if ((OP_CODE & DATA_PROCESS_F2_MASK) == DATA_PROCESS_F2_DECODE) {
+    write_decoder_log(arm, "Thumb Data Processing Instruction");
+    rn = arm->general_regs[(OP_CODE >> 3) & 7];
+    reg_p = &arm->general_regs[OP_CODE & 7];
+    imm_value = (OP_CODE >> 6) & 7;
     if (IS_BIT_SET(OP_CODE, 9)) {
-      rn = arm->general_regs[(OP_CODE >> 3) & 7];
-      reg_p = &arm->general_regs[OP_CODE & 7];
-      imm_value = (OP_CODE >> 6) & 7;
       goto SUB1;
     }
+
     goto ADD1;
 
   } else if ((OP_CODE & DATA_PROCESS_F3_MASK) == DATA_PROCESS_F3_DECODE) {
+    write_decoder_log(arm, "Thumb Data Processing Instruction");
     reg_p = &arm->general_regs[(OP_CODE >> 8) & 7];
     imm_value = OP_CODE & 0xFF;
     goto *dp_inst_table[4 + ((OP_CODE >> 11) & 3)];
 
   } else if ((OP_CODE & DATA_PROCESS_F4_MASK) == DATA_PROCESS_F4_DECODE) {
+    write_decoder_log(arm, "Thumb Data Processing Instruction");
     rm = arm->general_regs[(OP_CODE >> 3) & 7];
     reg_p = &arm->general_regs[OP_CODE & 7];
     imm_value = (OP_CODE >> 6) & 31;
     goto *dp_inst_table[8 + ((OP_CODE >> 11) & 3)];
 
   } else if ((OP_CODE & DATA_PROCESS_F5_MASK) == DATA_PROCESS_F5_DECODE) {
+    write_decoder_log(arm, "Thumb Data Processing Instruction");
     rm = arm->general_regs[(OP_CODE >> 3) & 7];
     reg_p = &arm->general_regs[OP_CODE & 7];
     goto *dp_inst_table[11 + ((OP_CODE >> 6) & 0xF)];
 
   } else if ((OP_CODE & DATA_PROCESS_F6_MASK) == DATA_PROCESS_F6_DECODE) {
+    write_decoder_log(arm, "Thumb Data Processing Instruction");
     reg_p = &arm->general_regs[(OP_CODE >> 8) & 7];
     imm_value = OP_CODE & 0xFF;
     reg_count = arm->mode * 16;
@@ -246,6 +256,7 @@ DECODE:
     goto ADD5;
 
   } else if ((OP_CODE & DATA_PROCESS_F7_MASK) == DATA_PROCESS_F7_DECODE) {
+    write_decoder_log(arm, "Thumb Data Processing Instruction");
     reg_count = arm->mode * 16;
     reg_p = arm->reg_table[reg_count + 13];
     imm_value = OP_CODE & 0x7F;
@@ -255,6 +266,7 @@ DECODE:
     goto ADD7;
 
   } else if ((OP_CODE & DATA_PROCESS_F8_MASK) == DATA_PROCESS_F8_DECODE) {
+    write_decoder_log(arm, "Thumb Data Processing Instruction");
     reg_count = arm->mode * 16;
     temp = IS_BIT_SET(OP_CODE, 7) * 8;
     reg_p = arm->reg_table[reg_count + (OP_CODE & 7) + temp];
@@ -471,7 +483,6 @@ ADD3:
   FLAGS_NZCV(*reg_p, rn, rm);
   goto END;
 ADD1:
-
   result = rn + imm_value;
   *reg_p = result;
   FLAGS_NZCV(*reg_p, rn, imm_value);
