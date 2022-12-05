@@ -473,8 +473,7 @@ DECODE:
   } else if ((OP_CODE & LOAD_STORE_W_U_MASK) == LOAD_STORE_W_U_DECODE) {
     // Load and store word or unsigned byte instructions and media instructions
     // and architecturally undefined instructions
-    printf("W_U %X\n", OP_CODE);
-    write_decoder_log(arm, "LoadStore_W_U Instruction");
+    // printf("W_U %X\n", OP_CODE);
     goto LOAD_STORE_W_U;
   } else if ((OP_CODE & LOAD_STORE_M_MASK) == LOAD_STORE_M_DECODE) {
     // Load and Store Multiple instructions
@@ -640,6 +639,7 @@ LOAD_STORE_W_U:
     if (IS_BIT_SET(OP_CODE, 21)) {
       goto LOAD_STORE_W_U_T_INSTS;
     }
+
     goto LOAD_STORE_W_U_INSTS;
   }
   // TODO check below implementation
@@ -929,7 +929,7 @@ DATA_PROCESS:
 
   goto END;
 SWI:
-  // TODO check implementation
+  // TODO check implementation {!Its Wrong}
   SWI_INSTRUCTION(arm);
   goto END;
 CONTROL:
@@ -1059,17 +1059,20 @@ CONTROL:
   goto END;
 BRANCH_LINK:
 
+  printf("%X\n", OP_CODE);
   // TODO make sure sign extend is correct
   shifter_operand = OP_CODE & 0xFFFFFF;
-  shifter_operand = shifter_operand | (IS_BIT_SET(s_bit, 23) *
+  shifter_operand = shifter_operand | (IS_BIT_SET(shifter_operand, 23) *
                                        0x3F000000); // sign extend to 30 bits
   shifter_operand <<= 2;
   if (IS_BIT_SET(OP_CODE, 24)) {
     // LR = address of the instruction after the branch instruction
     *arm->reg_table[reg_count] = arm->curr_instruction;
   }
+  printf("offset - %X, pc - %X\n", shifter_operand, arm->general_regs[R_15]);
   arm->general_regs[R_15] += shifter_operand;
   arm->curr_instruction = arm->general_regs[R_15];
+  printf("curr_instruction - %X\n", arm->curr_instruction);
   goto END;
 COPROCESSOR:
   goto END;
@@ -1228,6 +1231,7 @@ LOAD_STORE_W_U_T_INSTS:
 
 LOAD_STORE_W_U_INSTS:
 
+    write_decoder_log(arm, "LoadStore_W_U Instruction");
   // Instructions can be LDR, LDRB, STR, STRB
   temp = OP_CODE & 0x500000;
   rd = RD_C;

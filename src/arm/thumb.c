@@ -1,16 +1,17 @@
-// TODO - Implement flag setting for data processing instructions !{DONE NOT TESTED}
+// TODO - Implement flag setting for data processing instructions !{DONE NOT
+// TESTED}
 // TODO - check sign extending in Branch instruction !{DONE}
 // TODO - check instruction fetch
 // TESTED}
 // TODO check ASR instructions
 // TODO check branching is Rd is PC
+#include "../gba/gba.h"
+#include "../memory/memory.h"
 #include "arm.h"
 #include "thumb_inst_decode.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include "../gba/gba.h"
-#include "../memory/memory.h"
 
 #define OP_CODE arm->data_bus
 
@@ -60,7 +61,6 @@ int thumb_exec(Arm *arm) {
       &&CHECK_EQ, &&CHECK_NE, &&CHECK_CS_HS, &&CHECK_CC_LO, &&CHECK_MI,
       &&CHECK_PL, &&CHECK_VS, &&CHECK_VC,    &&CHECK_HI,    &&CHECK_LS,
       &&CHECK_GE, &&CHECK_LT, &&CHECK_GT,    &&CHECK_LE,    &&UNDEFINED};
-
 
   INTERRUPT_REQUEST();
 
@@ -174,8 +174,7 @@ DECODE:
       imm_value = SIGN_EXTEND(imm_value, 10);
       reg_count = arm->mode * 16;
       *arm->reg_table[reg_count + 14] =
-          arm->general_regs[15] +
-          (imm_value << 12);
+          arm->general_regs[15] + (imm_value << 12);
 
       goto END;
     } else if (temp == 0x1800) {
@@ -194,7 +193,7 @@ DECODE:
 
   } else if ((OP_CODE & BRANCH_EXCHANGE_MASK) == BRANCH_EXCHANGE_DECODE) {
     reg_count = arm->mode * 16;
-    
+
     rm = *arm->reg_table[reg_count + ((OP_CODE >> 3) & 0xF)];
     arm->cpsr = (arm->cpsr & 0xFFFFFFDF) | ((rm & 1) << 5);
     arm->mode = rm & 1;
@@ -506,7 +505,7 @@ LSL1:
   if (imm_value == 0) {
     *reg_p = rm;
   } else {
-    FLAG_C(IS_BIT_SET(rm, (32-imm_value)));
+    FLAG_C(IS_BIT_SET(rm, (32 - imm_value)));
     *reg_p = rm << imm_value;
   }
   FLAGS_NZ(*reg_p, *reg_p);
@@ -603,7 +602,8 @@ ASR2:
     FLAG_C(IS_BIT_SET(*reg_p, (rm - 1)));
     *reg_p = ASR_32(*reg_p, rm);
     // *reg_p =
-    //     (*reg_p >> rm) | (IS_BIT_SET(*reg_p, 31) * (0xFFFFFFFF << (32 - rm)));
+    //     (*reg_p >> rm) | (IS_BIT_SET(*reg_p, 31) * (0xFFFFFFFF << (32 -
+    //     rm)));
   } else {
     FLAG_C(IS_BIT_SET(*reg_p, 31));
     if (IS_BIT_SET(*reg_p, 31)) {
@@ -620,7 +620,7 @@ ADC:
   *reg_p = result;
   goto END;
 SBC:
-  rm = (~rm)  + 1;
+  rm = (~rm) + 1;
   result = *reg_p + rm + IS_BIT_NOT_SET(arm->cpsr, CF_BIT);
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, rm);
   *reg_p = result;
