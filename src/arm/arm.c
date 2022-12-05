@@ -1397,11 +1397,21 @@ SMLAL_INST:
   goto END;
 
 SWP_INST:
-  
-  printf("SWP_INST\n");
+  reg_count = arm->mode * 16;
+  rn = *arm->reg_table[reg_count + RN_C];
+  rm = *arm->reg_table[reg_count + RM_C];
+  MEM_READ(rn, shifter_operand, mem_read32);
+  MEM_WRITE(rn, rm, mem_write32);
+  *arm->reg_table[reg_count + RD_C] = shifter_operand;
   goto END;
 
 SWPB_INST:
+  reg_count = arm->mode * 16;
+  rn = *arm->reg_table[reg_count + RN_C];
+  rm = *arm->reg_table[reg_count + RM_C];
+  MEM_READ(rn, shifter_operand, mem_read8);
+  MEM_WRITE(rn, rm, mem_write8);
+  *arm->reg_table[reg_count + RD_C] = shifter_operand;
 
 END:
   return 0;
