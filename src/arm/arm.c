@@ -80,7 +80,7 @@
   arm->cpsr = temp;
 
 #define DATA_PROCESS_NZCV()                                                    \
-  FLAG_SETTING_NZCV(result, *reg_p, (result & 0x100000000) >> 3)               \
+  FLAG_SETTING_NZCV(result, *reg_p, (result & 0x100000000) >> 3)
 
 #define FLAG_SETTING_NZC(_nf, _zf, _cf)                                        \
   temp = arm->cpsr & 0x1FFFFFFF;                                               \
@@ -121,7 +121,9 @@
     if (s_bit) {                                                               \
       if (arm->mode > 1) {                                                     \
         arm->cpsr = arm->spsr[arm->mode - 2];                                  \
+        arm->mode = processor_modes[arm->cpsr & 0xF];                          \
       }                                                                        \
+      write_instruction_log(arm, "SUB");                                       \
       goto END;                                                                \
     }                                                                          \
   }
@@ -155,7 +157,7 @@ void gen_reg_table(Arm *arm) {
     for (int reg = 0; reg < 16; reg++) {
       if (mode < 2) {
         // user mode and system mode
-        arm->reg_table[reg] = &arm->general_regs[reg];
+        arm->reg_table[(mode * 16) + reg] = &arm->general_regs[reg];
         continue;
       }
       if (mode == FIQ) {
@@ -213,9 +215,9 @@ void init_arm(Arm *arm) {
   arm->reset_pin = 0;
   arm->irq_pin = 0;
   arm->state = 0; // default arm state
-  
+
   index = 0;
-  while(index < 5) {
+  while (index < 5) {
     arm->spsr[index++] = 16;
   }
   gen_reg_table(arm);
@@ -459,7 +461,6 @@ DECODE:
       write_decoder_log(arm, "Swpb");
       goto SWPB_INST;
     }
-    printf("OP_CODE %X\n", OP_CODE);
     write_decoder_log(arm, "LoadStore_H_D_S Instruction");
     goto LOAD_STORE_H_D_S;
   } else if ((OP_CODE & DATA_PROCESS_MASK) == DATA_PROCESS_DECODE) {
@@ -780,6 +781,7 @@ DATA_PROCESS:
 
 #define INST_OPCODE ((OP_CODE >> 21) & 0xF)
   reg_count = arm->mode * 16;
+
   rn = *arm->reg_table[reg_count + RN_C];
   rd = RD_C;
   reg_p = arm->reg_table[reg_count + rd];
@@ -863,10 +865,17 @@ DATA_PROCESS:
 
   temp = OP_CODE & SHIFTER_SHIFT_REG_MASK;
 
+  if (RM_C == R_15) {
+    rm += 4;
+  }
+  if (RN_C == R_15) {
+    rn += 4;
+  }
   rs = (*arm->reg_table[reg_count + RS_C]) &
        0xFF; // least significant byte of register rs
   if (temp == SHIFTER_LSL_REG_DECODE) {
 
+    // instruction prefetching pc increase by 12
     if (rs == 0) {
       shifter_operand = rm;
       shifter_carry_out = GET_BIT(arm->cpsr, CF_BIT);
@@ -938,11 +947,10 @@ SWI:
   goto END;
 CONTROL:
 
-  printf("OP_CODE: %X\n", OP_CODE);
+  // printf("OP_CODE: %X\n", OP_CODE);
 #define operand shifter_operand
   reg_count = arm->mode * 16;
   if ((OP_CODE & BX_MASK) == BX_DECODE) {
-    printf("BX\n");
     rm = *arm->reg_table[reg_count + RM_C];
     // T bit
     arm->cpsr = SET_BIT(arm->cpsr, 5, (rm & 1));
@@ -952,7 +960,6 @@ CONTROL:
     goto END;
 
   } else if ((OP_CODE & MRS_MASK) == MRS_DECODE) {
-    printf("MRS\n");
     reg_p = arm->reg_table[reg_count + RD_C];
     if (IS_BIT_SET(OP_CODE, 22)) {
       if (arm->mode > 1) {
@@ -966,7 +973,6 @@ CONTROL:
   } else if ((OP_CODE & MSR_IMM_MASK) == MSR_IMM_DECODE) {
     rotate_imm = ROTATE_IMM * 2;
     operand = ROTATE_RIGHT32((unsigned int)IMM_8, rotate_imm);
-    printf("operand - %d\n", operand);
 
   } else if ((OP_CODE & MSR_REG_MASK) == MSR_REG_DECODE) {
     operand = *arm->reg_table[reg_count + RM_C];
@@ -996,13 +1002,9 @@ CONTROL:
 
   if (IS_BIT_SET(OP_CODE, 22)) {
     if (arm->mode > 1) {
-      printf("spsr - %d\n", arm->spsr[arm->mode - 2]);
       mask = byte_mask & (user_mask | private_mask | state_mask);
-      printf("mode %d\n", arm->mode);
       arm->spsr[arm->mode - 2] =
           (arm->spsr[arm->mode - 2] & (~mask)) | (operand & mask);
-      printf("mask - %X\n", mask);
-      printf("spsr - %d\n", arm->spsr[arm->mode - 2]);
     }
     // unpredictable
 
@@ -1012,7 +1014,6 @@ CONTROL:
       if ((operand & state_mask) == 0) {
 
         mask = byte_mask & (user_mask | private_mask);
-        printf("mask2 - %X\n", mask);
       }
       // unpredictable
     } else {
@@ -1022,34 +1023,10 @@ CONTROL:
     arm->cpsr = (arm->cpsr & (~mask)) | (operand & mask);
     // set state, mode
     arm->state = IS_BIT_SET(arm->cpsr, 5);
-    switch (arm->cpsr & 0x1F) {
-    case 0b10000:
-      arm->mode = USR;
-      break;
-    case 0b10001:
-      arm->mode = FIQ;
-      break;
-
-    case 0b10010:
-      arm->mode = IRQ;
-      break;
-    case 0b10011:
-      arm->mode = SVC;
-      break;
-    case 0b10111:
-      arm->mode = ABT;
-      break;
-
-    case 0b11011:
-      arm->mode = UND;
-      break;
-
-    case 0b11111:
-      arm->mode = SYS;
-      break;
-    default:
-      // error
-      break;
+    arm->mode = processor_modes[arm->cpsr & 0xF];
+    if (arm->mode > 6) {
+      printf("Not a valid processor mode\n");
+      exit(1);
     }
   }
 #ifdef DEBUG_ON
@@ -1070,7 +1047,6 @@ CONTROL:
   goto END;
 BRANCH_LINK:
 
-  printf("%X\n", OP_CODE);
   // TODO make sure sign extend is correct
   shifter_operand = OP_CODE & 0xFFFFFF;
   shifter_operand = shifter_operand | (IS_BIT_SET(shifter_operand, 23) *
@@ -1080,10 +1056,8 @@ BRANCH_LINK:
     // LR = address of the instruction after the branch instruction
     *arm->reg_table[reg_count] = arm->curr_instruction;
   }
-  printf("offset - %X, pc - %X\n", shifter_operand, arm->general_regs[R_15]);
   arm->general_regs[R_15] += shifter_operand;
   arm->curr_instruction = arm->general_regs[R_15];
-  printf("curr_instruction - %X\n", arm->curr_instruction);
   goto END;
 COPROCESSOR:
   goto END;
@@ -1092,6 +1066,7 @@ UNDEFINED:
   goto END;
 
 UNCONDITIONAL:
+  // for testing purposes only
   goto END;
   // unpredictable
 
@@ -1111,13 +1086,13 @@ EOR_INST:
   goto END;
 SUB_INST:
 
-  printf("spsr - %d\n", arm->spsr[arm->mode - 2]);
   shifter_operand = (~shifter_operand) + 1; // two's compliment
   result = rn + shifter_operand;
   *reg_p = result;
-
-  DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) {
-    DATA_PROCESS_NZCV(); }
+  DATA_PROCESS_RD_EQ_R15(arm);
+  if (s_bit) {
+    DATA_PROCESS_NZCV();
+  }
 
 #ifdef DEBUG_ON
   write_instruction_log(arm, "SUB");
@@ -1194,7 +1169,6 @@ TEQ_INST:
 CMP_INST:
   shifter_operand = (~shifter_operand) + 1;
   result = rn + shifter_operand;
-  printf("rn - %d, shifter_operand - %d\n", rn, shifter_operand);
   COMPARE_INSTS_NZCV();
 #ifdef DEBUG_ON
   write_instruction_log(arm, "CMP");
@@ -1278,23 +1252,19 @@ LOAD_STORE_W_U_T_INSTS:
   reg_p = arm->reg_table[reg_count + RD_C];
   if (temp == LDRBT_DECODE) {
     // *reg_p = arm_read(ls_address);
-    printf("LDRBT\n");
     ARM_READ(ls_address, *reg_p, mem_read8);
     *arm->reg_table[reg_count + RN_C] = ls_address;
 
   } else if (temp == STRBT_DECODE) {
     ARM_WRITE(ls_address, *reg_p, mem_write8);
-    printf("STRBT\n");
 
   } else if (temp == LDRT_DECODE) {
 
     // *reg_p = arm_read(ls_address);
     ARM_READ(ls_address, *reg_p, mem_read32);
-    printf("LDRT\n");
 
   } else if (temp == STRT_DECODE) {
     ARM_WRITE(ls_address, *reg_p, mem_write32);
-    printf("STRT\n");
   }
   goto END;
 
@@ -1314,20 +1284,16 @@ LOAD_STORE_W_U_INSTS:
     } else {
       *reg_p = result;
     }
-    printf("LDR\n");
 
   } else if (temp == STR_DECODE) {
     ARM_WRITE(ls_address, *reg_p, mem_write32); // word write
-    printf("STR\n");
 
   } else if (temp == LDRB_DECODE) {
     // *reg_p = arm_read(ls_address); // unsigned byte memory access
     ARM_READ(ls_address, *reg_p, mem_read8);
-    printf("LDRB\n");
 
   } else if (temp == STRB_DECODE) {
     ARM_WRITE(ls_address, *reg_p, mem_write8); // byte write
-    printf("STRB\n");
   }
   goto END;
 

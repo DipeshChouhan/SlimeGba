@@ -4,12 +4,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-int processor_modes[16] = {USR, FIQ, IRQ, SVC, 0, 0, 0, ABT, 0, 0, 0, UND, 0, 0, 0, SYS};
+int processor_modes[16] = {USR, FIQ, IRQ, SVC, 7, 7, 7, ABT, 7, 7, 7, UND, 7, 7, 7, SYS};
 
 void power_on_gba(uint8_t *rom, unsigned int rom_size) {
   // printf("file open of size - %d\n", rom_size);
   Gba gba;
   gba.arm.curr_instruction = 0x03000000;
+  printf("%d\n", gba.arm.curr_instruction);
   init_arm(&gba.arm);
 
   memcpy(&gba.memory.iwram, rom, rom_size);
