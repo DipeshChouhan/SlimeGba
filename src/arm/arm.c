@@ -116,13 +116,11 @@
   arm->cpsr = temp;
 
 #define DATA_PROCESS_RD_EQ_R15(_arm)                                           \
-  if (s_bit) {                                                                 \
-    if (rd == R_15) {                                                          \
-      if (_arm->mode > 1) {                                                    \
-        _arm->cpsr = _arm->spsr[_arm->mode - 2];                               \
-      }                                                                        \
-      arm->curr_instruction = arm->general_regs[R_15];                         \
+  if (s_bit && rd == R_15) {                                                   \
+    if (_arm->mode > 1) {                                                      \
+      _arm->cpsr = _arm->spsr[_arm->mode - 2];                                 \
     }                                                                          \
+    arm->curr_instruction = arm->general_regs[R_15];                           \
   }
 
 #define OP_CODE arm->data_bus
@@ -1118,6 +1116,9 @@ ADD_INST:
   result = rn + shifter_operand;
   *reg_p = result;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(); }
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "ADD");
+#endif
   // write_instruction_log(arm, "add");
   goto END;
 ADC_INST:
@@ -1180,6 +1181,10 @@ BIC_INST:
 MVN_INST:
   *reg_p = ~shifter_operand;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(); }
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "MVN");
+#endif
+
   goto END;
 
 LOAD_STORE_H_D_S_INSTS:
