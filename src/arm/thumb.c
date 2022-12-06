@@ -72,12 +72,16 @@ int thumb_exec(Arm *arm) {
 DECODE:
 
   if ((OP_CODE & SWI_MASK) == SWI_DECODE) {
+    printf("SWI\n");
+    write_decoder_log(arm, "SWI");
     // swi
     SWI_INSTRUCTION(arm);
     goto END;
   }
 
   if ((OP_CODE & COND_BRANCH_MASK) == COND_BRANCH_DECODE) {
+    printf("cond branch\n");
+    write_decoder_log(arm, "COND_BRANCH");
     // B1
     //
 
@@ -156,6 +160,7 @@ DECODE:
     goto END;
 
   B1_INST:
+    write_decoder_log(arm, "B1");
     imm_value = OP_CODE & 0xFF;
     imm_value = SIGN_EXTEND(imm_value, 7);
     arm->general_regs[15] += (imm_value << 1);
@@ -163,6 +168,7 @@ DECODE:
     goto END;
 
   } else if ((OP_CODE & UNCOND_BRANCH_MASK) == UNCOND_BRANCH_DECODE) {
+    write_decoder_log(arm, "UNCOND_BRANCH");
     temp = OP_CODE & 0x1800;       // bits 11 and 12
                                    // 0xFFFFF800
     imm_value = (OP_CODE & 0x7FF); // signed_immed_11
@@ -195,6 +201,7 @@ DECODE:
     goto UNDEFINED;
 
   } else if ((OP_CODE & BRANCH_EXCHANGE_MASK) == BRANCH_EXCHANGE_DECODE) {
+    write_decoder_log(arm, "BX");
     reg_count = arm->mode * 16;
 
     rm = *arm->reg_table[reg_count + ((OP_CODE >> 3) & 0xF)];
@@ -287,46 +294,55 @@ DECODE:
   temp = OP_CODE & LOAD_STORE_F1_MASK;
 
   if (temp == LDR1_DECODE) {
+    write_decoder_log(arm, "LDR1");
     imm_value = immed_5 * 4;
     address = RN_F1 + imm_value;
     MEM_READ(address, RD_F1, mem_read32);
     goto END;
 
   } else if (temp == LDRB1_DECODE) {
+    write_decoder_log(arm, "LDRB1");
     address = RN_F1 + immed_5;
     MEM_READ(address, RD_F1, mem_read8);
     goto END;
 
   } else if (temp == LDRH1_DECODE) {
+    write_decoder_log(arm, "LDRH1");
     imm_value = immed_5 * 2;
     address = RN_F1 + imm_value;
     MEM_READ(address, RD_F1, mem_read16);
     goto END;
 
   } else if (temp == STR1_DECODE) {
+    write_decoder_log(arm, "STR1");
     imm_value = immed_5 * 4;
     address = RN_F1 + imm_value;
     MEM_WRITE(address, RD_F1, mem_write32);
     goto END;
 
   } else if (temp == STRB1_DECODE) {
+    write_decoder_log(arm, "STRB1");
     address = RN_F1 + immed_5;
     MEM_WRITE(address, RD_F1, mem_write8);
     goto END;
 
   } else if (temp == STRH1_DECODE) {
+    write_decoder_log(arm, "STRH1");
     imm_value = immed_5 * 2;
     address = RN_F1 + imm_value;
     MEM_WRITE(address, RD_F1, mem_write16);
     goto END;
 
   } else if (temp == LDR3_DECODE) {
+    write_decoder_log(arm, "LDR3");
+
 
     imm_value = immed_8 * 4;
     address = (arm->general_regs[15] & 0xFFFFFFFC) + imm_value;
     MEM_READ(address, RD_F3, mem_read32);
     goto END;
   } else if (temp == LDR4_DECODE) {
+    write_decoder_log(arm, "LDR4");
     reg_count = arm->mode * 16;
     imm_value = immed_8 * 4;
     address = *arm->reg_table[reg_count + 13] + imm_value;
@@ -334,6 +350,7 @@ DECODE:
     goto END;
 
   } else if (temp == STR3_DECODE) {
+    write_decoder_log(arm, "STR3");
     reg_count = arm->mode * 16;
     imm_value = immed_8 * 4;
     address = *arm->reg_table[reg_count + 13] + imm_value;
@@ -385,39 +402,48 @@ DECODE:
   temp = OP_CODE & LOAD_STORE_F2_MASK;
 
   if (temp == LDR2_DECODE) {
+    write_decoder_log(arm, "LDR2");
     MEM_READ(address, RD_F1, mem_read32);
     goto END;
 
   } else if (temp == LDRB2_DECODE) {
+    write_decoder_log(arm, "LDRB2");
     MEM_READ(address, RD_F1, mem_read8);
     goto END;
   } else if (temp == LDRH2_DECODE) {
+    write_decoder_log(arm, "LDRH2");
     MEM_READ(address, RD_F1, mem_read16);
     goto END;
 
   } else if (temp == STR2_DECODE) {
+    write_decoder_log(arm, "STR2");
     MEM_WRITE(address, RD_F1, mem_write32);
     goto END;
   } else if (temp == STRB2_DECODE) {
+    write_decoder_log(arm, "STRB2");
     MEM_WRITE(address, RD_F1, mem_write8);
     goto END;
 
   } else if (temp == STRH2_DECODE) {
+    write_decoder_log(arm, "STRH2");
     MEM_WRITE(address, RD_F1, mem_write16);
     goto END;
 
   } else if (temp == LDRSB_DECODE) {
+    write_decoder_log(arm, "LDRSB");
     MEM_READ(address, imm_value, mem_read8);
     imm_value = SIGN_EXTEND(imm_value, 7);
     RD_F1 = imm_value;
     goto END;
 
   } else if (temp == LDRSH_DECODE) {
+    write_decoder_log(arm, "LDRSH");
     MEM_READ(address, imm_value, mem_read16);
     imm_value = SIGN_EXTEND(imm_value, 15);
     RD_F1 = imm_value;
     goto END;
   } else if (temp == PUSH) {
+    write_decoder_log(arm, "PUSH");
     imm_value = immed_8; // reg list
 
     rm = 0; // number of set bits
@@ -449,6 +475,7 @@ DECODE:
     goto END;
 
   } else if (temp == POP) {
+    write_decoder_log(arm, "POP");
     address = *arm->reg_table[(arm->mode * 16) + 13]; // SP
     imm_value = immed_8;                              // reg list
     rn = IS_BIT_SET(OP_CODE, 8);                      // R Bit
@@ -476,6 +503,8 @@ DECODE:
         *arm->reg_table[reg_count + 13] + 4 * (rn + rm);
     goto END;
   }
+
+  goto UNDEFINED;
 
 ADD3:
   result = rn + rm;
@@ -685,12 +714,15 @@ MVN:
   FLAGS_NZ(*reg_p, *reg_p);
   goto END;
 ADD5:
+  printf("ADD5\n");
   *reg_p = (rn & 0xFFFFFFFC) + (imm_value * 4);
   goto END;
 ADD6:
+  printf("ADD6\n");
   *reg_p = rn + (imm_value << 2);
   goto END;
 ADD7:
+  printf("ADD7\n");
   *reg_p = *reg_p + (imm_value << 2);
   goto END;
 SUB4:
@@ -698,6 +730,7 @@ SUB4:
   *reg_p = *reg_p + (~imm_value) + 1;
   goto END;
 ADD4:
+  printf("ADD4\n");
   *reg_p = *reg_p + rm;
   if (reg_p == arm->reg_table[15]) {
     arm->curr_instruction = *reg_p & 0xFFFFFFFE;
@@ -716,6 +749,7 @@ MOV3:
   goto END;
 CPY:
 UNDEFINED:
+  printf("Undefined\n");
 END:
   return 0;
 }

@@ -76,7 +76,8 @@
   temp |= (_cf);                                                               \
   temp |= ((((rn & 0x80000000) == (shifter_operand & 0x80000000)) &&           \
             ((rn & 0x80000000) != (result & 0x80000000)))                      \
-           << 28);
+           << 28);                                                             \
+  arm->cpsr = temp;
 
 #define DATA_PROCESS_NZCV()                                                    \
   FLAG_SETTING_NZCV(result, *reg_p, (result & 0x100000000) >> 3)
@@ -85,14 +86,16 @@
   temp = arm->cpsr & 0x1FFFFFFF;                                               \
   temp |= (_nf & 0x80000000);                                                  \
   temp |= ((_zf == 0) << 30);                                                  \
-  temp |= (_cf << 29);
+  temp |= (_cf << 29);                                                         \
+  arm->cpsr = temp;
 
 #define DATA_PROCESS_NZC() FLAG_SETTING_NZC(*reg_p, *reg_p, shifter_carry_out);
 
 #define FLAG_SETTING_NZ(_nf, _zf)                                              \
   temp = arm->cpsr & 0x3FFFFFFF;                                               \
   temp |= (_nf & 0x80000000);                                                  \
-  temp |= ((_zf == 0) << 30);
+  temp |= ((_zf == 0) << 30);                                                  \
+  arm->cpsr = temp;
 
 #define COMPARE_INSTS_NZC()                                                    \
   FLAG_SETTING_NZC(result, (result & 0xFFFFFFFF), shifter_carry_out);
@@ -103,12 +106,14 @@
 #define MUL_NZ(_arm)                                                           \
   temp = _arm->cpsr & 0x3FFFFFFF;                                              \
   temp |= (*reg_p & 0x80000000);                                               \
-  temp |= ((*reg_p == 0) << 30);
+  temp |= ((*reg_p == 0) << 30);                                               \
+  arm->cpsr = temp;
 
 #define USMULL_NZ(_arm)                                                        \
   temp = _arm->cpsr & 0x3FFFFFFF;                                              \
   temp |= (*reg_p & 0x80000000);                                               \
-  temp |= (((*reg_p == 0) && (*_arm->reg_table[rn] == 0)) << 30);
+  temp |= (((*reg_p == 0) && (*_arm->reg_table[rn] == 0)) << 30);              \
+  arm->cpsr = temp;
 
 #define DATA_PROCESS_RD_EQ_R15(_arm)                                           \
   if (s_bit) {                                                                 \
@@ -440,12 +445,12 @@ DECODE:
     rn = reg_count + RD_C;
     s_bit = S_BIT;
 
-    write_decoder_log(arm, "Multiply Instruction");
+    // write_decoder_log(arm, "Multiply Instruction");
     goto *mul_inst_table[temp];
   } else if ((OP_CODE & LOAD_STORE_H_D_S_MASK) == LOAD_STORE_H_D_S_DECODE) {
     // Load and store halfword or doubleword, and load signed byte instructions,
     // and swp and swpb
-    
+
     temp = OP_CODE & SWP_MASK;
     if (temp == SWP_DECODE) {
       write_decoder_log(arm, "Swp");
@@ -461,7 +466,7 @@ DECODE:
     // instructions can data processing, control or undefined
     if ((OP_CODE & CONTROL_MASK) != CONTROL_DECODE) {
       // instructions are data processing
-      write_decoder_log(arm, "Data Process Instruction");
+      // write_decoder_log(arm, "Data Process Instruction");
       goto DATA_PROCESS;
     }
 
@@ -763,7 +768,6 @@ LOAD_STORE_M:
       *reg_p = start_address;
     }
   }
-
 
   goto LOAD_STORE_M_INSTS;
 #undef reg_list
@@ -1147,6 +1151,9 @@ CMP_INST:
   shifter_operand = (~shifter_operand) + 1;
   result = rn + shifter_operand;
   COMPARE_INSTS_NZCV();
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "CMP");
+#endif
   goto END;
 CMN_INST:
   result = rn + shifter_operand;
@@ -1160,6 +1167,9 @@ ORR_INST:
 MOV_INST:
   *reg_p = shifter_operand;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(); }
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "mov");
+#endif
 
   // write_instruction_log(arm, "mov");
   goto END;
@@ -1231,7 +1241,7 @@ LOAD_STORE_W_U_T_INSTS:
 
 LOAD_STORE_W_U_INSTS:
 
-    write_decoder_log(arm, "LoadStore_W_U Instruction");
+  write_decoder_log(arm, "LoadStore_W_U Instruction");
   // Instructions can be LDR, LDRB, STR, STRB
   temp = OP_CODE & 0x500000;
   rd = RD_C;
