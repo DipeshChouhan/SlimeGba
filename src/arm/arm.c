@@ -468,7 +468,7 @@ DECODE:
       goto DATA_PROCESS;
     }
 
-    write_decoder_log(arm, "Control Instruction");
+    // write_decoder_log(arm, "Control Instruction");
     goto CONTROL;
 
     // control instruction
@@ -962,12 +962,10 @@ CONTROL:
     goto END;
 
   } else if ((OP_CODE & MSR_IMM_MASK) == MSR_IMM_DECODE) {
-    printf("MSR_IMM\n");
     rotate_imm = ROTATE_IMM * 2;
     operand = ROTATE_RIGHT32((unsigned int)IMM_8, rotate_imm);
 
   } else if ((OP_CODE & MSR_REG_MASK) == MSR_REG_DECODE) {
-    printf("MSR_REG\n");
     operand = *arm->reg_table[reg_count + RM_C];
   } else {
     // error undefined opcode
@@ -1046,6 +1044,9 @@ CONTROL:
       break;
     }
   }
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "MSR");
+#endif
 
 #undef operand
 #undef unalloc_mask
@@ -1089,10 +1090,16 @@ UNCONDITIONAL:
 AND_INST:
   *reg_p = rn & shifter_operand;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(); }
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "AND");
+#endif
   goto END;
 EOR_INST:
   *reg_p = rn ^ shifter_operand;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(); }
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "EOR");
+#endif
   goto END;
 SUB_INST:
 
@@ -1102,6 +1109,10 @@ SUB_INST:
 
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(); }
 
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "SUB");
+#endif
+
   // write_instruction_log(arm, "sub");
   goto END;
 RSB_INST:
@@ -1110,6 +1121,10 @@ RSB_INST:
   *reg_p = result;
 
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(); }
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "RSB");
+#endif
+
   goto END;
 
 ADD_INST:
@@ -1126,13 +1141,19 @@ ADC_INST:
   result = rn + shifter_operand + IS_BIT_SET(arm->cpsr, CF_BIT);
   *reg_p = result;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(); }
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "ADC");
+#endif
   goto END;
 
 SBC_INST:
   shifter_operand = (~shifter_operand) + 1;
-  result = rn + shifter_operand + IS_BIT_NOT_SET(arm->cpsr, CF_BIT);
+  result = rn + shifter_operand - IS_BIT_NOT_SET(arm->cpsr, CF_BIT);
   *reg_p = result;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(); }
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "SBC");
+#endif
   goto END;
 RSC_INST:
   rn = (~rn) + 1;
@@ -1164,12 +1185,16 @@ ORR_INST:
   *reg_p = rn | shifter_operand;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(); }
 
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "OR");
+#endif
+
   goto END;
 MOV_INST:
   *reg_p = shifter_operand;
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(); }
 #ifdef DEBUG_ON
-  write_instruction_log(arm, "mov");
+  write_instruction_log(arm, "MOV");
 #endif
 
   // write_instruction_log(arm, "mov");
@@ -1177,6 +1202,9 @@ MOV_INST:
 BIC_INST:
   *reg_p = rn & (~shifter_operand);
   DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(); }
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "BIC");
+#endif
   goto END;
 MVN_INST:
   *reg_p = ~shifter_operand;
