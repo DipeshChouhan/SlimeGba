@@ -35,14 +35,15 @@ typedef struct Arm {
   // ARM-state program status registers
   uint32_t cpsr;
   // don't change order below
-  union {
-    uint32_t spsr[5];
-    uint32_t spsr_fiq;
-    uint32_t spsr_irq;
-    uint32_t spsr_svc;
-    uint32_t spsr_abt;
-    uint32_t spsr_und;
-  };
+  uint32_t spsr[5];
+  // union {
+  //   uint32_t spsr[5];
+  //   uint32_t spsr_irq;
+  //   uint32_t spsr_svc;
+  //   uint32_t spsr_abt;
+  //   uint32_t spsr_und;
+  //   uint32_t spsr_fiq;
+  // };
 
   // exception
   int exception_gen; // shows an exception generated externally
@@ -111,7 +112,7 @@ typedef struct Arm {
 
 #define SWI_INSTRUCTION(_arm)                                                  \
   _arm->svc_regs[R14_SVC] = _arm->curr_instruction;                            \
-  _arm->spsr_svc = _arm->cpsr;                                                 \
+  _arm->spsr[SVC - 2] = _arm->cpsr;                                                 \
   SET_P_MODE(_arm->cpsr, SVC_MODE);                                            \
   _arm->mode = SVC;                                                            \
   SET_P_STATE(_arm->cpsr, ARM_STATE);                                          \
@@ -136,7 +137,7 @@ typedef struct Arm {
     } else if (arm->fiq_pin && IS_BIT_SET(arm->cpsr, 6)) {                     \
       arm->fiq_pin = 0;                                                        \
       arm->fiq_regs[R14_FIQ] = arm->curr_instruction + 4;                      \
-      arm->spsr_fiq = arm->cpsr;                                               \
+      arm->spsr[FIQ - 2] = arm->cpsr;                                               \
       SET_P_MODE(arm->cpsr, FIQ_MODE);                                         \
       arm->mode = FIQ;                                                         \
       SET_P_STATE(arm->cpsr, ARM_STATE);                                       \
@@ -147,7 +148,7 @@ typedef struct Arm {
     } else if (arm->irq_pin && IS_BIT_SET(arm->cpsr, 7)) {                     \
       arm->irq_pin = 0;                                                        \
       arm->irq_regs[R14_IRQ] = arm->curr_instruction + 4;                      \
-      arm->spsr_irq = arm->cpsr;                                               \
+      arm->spsr[IRQ - 2] = arm->cpsr;                                               \
       SET_P_MODE(arm->cpsr, IRQ_MODE);                                         \
       arm->mode = IRQ;                                                         \
       SET_P_STATE(arm->cpsr, ARM_STATE);                                       \
@@ -161,4 +162,5 @@ void init_arm(Arm *arm);
 // execute a single arm mode instruction and returns cycle count
 int arm_exec(Arm *arm);
 int thumb_exec(Arm *arm);
+extern int processor_modes[16];
 #endif /* ! */

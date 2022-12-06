@@ -80,7 +80,7 @@
   arm->cpsr = temp;
 
 #define DATA_PROCESS_NZCV()                                                    \
-  FLAG_SETTING_NZCV(result, *reg_p, (result & 0x100000000) >> 3)
+  FLAG_SETTING_NZCV(result, *reg_p, (result & 0x100000000) >> 3)               \
 
 #define FLAG_SETTING_NZC(_nf, _zf, _cf)                                        \
   temp = arm->cpsr & 0x1FFFFFFF;                                               \
@@ -116,9 +116,13 @@
   arm->cpsr = temp;
 
 #define DATA_PROCESS_RD_EQ_R15(_arm)                                           \
-  if (s_bit && rd == R_15) {                                                   \
-    if (_arm->mode > 1) {                                                      \
-      _arm->cpsr = _arm->spsr[_arm->mode - 2];                                 \
+  if (rd == R_15) {                                                            \
+    arm->curr_instruction = *reg_p;                                            \
+    if (s_bit) {                                                               \
+      if (arm->mode > 1) {                                                     \
+        arm->cpsr = arm->spsr[arm->mode - 2];                                  \
+      }                                                                        \
+      goto END;                                                                \
     }                                                                          \
   }
 
@@ -152,7 +156,6 @@ void gen_reg_table(Arm *arm) {
       if (mode < 2) {
         // user mode and system mode
         arm->reg_table[reg] = &arm->general_regs[reg];
-        printf("reg - %d\n", reg);
         continue;
       }
       if (mode == FIQ) {
@@ -209,13 +212,12 @@ void init_arm(Arm *arm) {
   arm->exception_gen = 0;
   arm->reset_pin = 0;
   arm->irq_pin = 0;
-  arm->fiq_pin = 0;
-  arm->spsr_fiq = 0;
-  arm->spsr_abt = 0;
-  arm->spsr_irq = 0;
-  arm->spsr_svc = 0;
-  arm->spsr_und = 0;
   arm->state = 0; // default arm state
+  
+  index = 0;
+  while(index < 5) {
+    arm->spsr[index++] = 16;
+  }
   gen_reg_table(arm);
 
   // all global test goes here
@@ -964,6 +966,7 @@ CONTROL:
   } else if ((OP_CODE & MSR_IMM_MASK) == MSR_IMM_DECODE) {
     rotate_imm = ROTATE_IMM * 2;
     operand = ROTATE_RIGHT32((unsigned int)IMM_8, rotate_imm);
+    printf("operand - %d\n", operand);
 
   } else if ((OP_CODE & MSR_REG_MASK) == MSR_REG_DECODE) {
     operand = *arm->reg_table[reg_count + RM_C];
@@ -993,9 +996,13 @@ CONTROL:
 
   if (IS_BIT_SET(OP_CODE, 22)) {
     if (arm->mode > 1) {
+      printf("spsr - %d\n", arm->spsr[arm->mode - 2]);
       mask = byte_mask & (user_mask | private_mask | state_mask);
+      printf("mode %d\n", arm->mode);
       arm->spsr[arm->mode - 2] =
           (arm->spsr[arm->mode - 2] & (~mask)) | (operand & mask);
+      printf("mask - %X\n", mask);
+      printf("spsr - %d\n", arm->spsr[arm->mode - 2]);
     }
     // unpredictable
 
@@ -1005,6 +1012,7 @@ CONTROL:
       if ((operand & state_mask) == 0) {
 
         mask = byte_mask & (user_mask | private_mask);
+        printf("mask2 - %X\n", mask);
       }
       // unpredictable
     } else {
@@ -1089,25 +1097,27 @@ UNCONDITIONAL:
 
 AND_INST:
   *reg_p = rn & shifter_operand;
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(); }
+  DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZC(); }
 #ifdef DEBUG_ON
   write_instruction_log(arm, "AND");
 #endif
   goto END;
 EOR_INST:
   *reg_p = rn ^ shifter_operand;
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(); }
+  DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZC(); }
 #ifdef DEBUG_ON
   write_instruction_log(arm, "EOR");
 #endif
   goto END;
 SUB_INST:
 
+  printf("spsr - %d\n", arm->spsr[arm->mode - 2]);
   shifter_operand = (~shifter_operand) + 1; // two's compliment
   result = rn + shifter_operand;
   *reg_p = result;
 
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(); }
+  DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) {
+    DATA_PROCESS_NZCV(); }
 
 #ifdef DEBUG_ON
   write_instruction_log(arm, "SUB");
@@ -1120,7 +1130,7 @@ RSB_INST:
   result = rn + shifter_operand;
   *reg_p = result;
 
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(); }
+  DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZCV(); }
 #ifdef DEBUG_ON
   write_instruction_log(arm, "RSB");
 #endif
@@ -1131,10 +1141,7 @@ ADD_INST:
   result = rn + shifter_operand;
   *reg_p = result;
 
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(); }
-  if (rd == R_15) {
-    arm->curr_instruction = arm->general_regs[R_15];
-  }
+  DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZCV(); }
 #ifdef DEBUG_ON
   write_instruction_log(arm, "ADD");
 #endif
@@ -1144,7 +1151,7 @@ ADC_INST:
 
   result = rn + shifter_operand + IS_BIT_SET(arm->cpsr, CF_BIT);
   *reg_p = result;
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(); }
+  DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZCV(); }
 #ifdef DEBUG_ON
   write_instruction_log(arm, "ADC");
 #endif
@@ -1154,7 +1161,7 @@ SBC_INST:
   shifter_operand = (~shifter_operand) + 1;
   result = rn + shifter_operand - IS_BIT_NOT_SET(arm->cpsr, CF_BIT);
   *reg_p = result;
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(); }
+  DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZCV(); }
 #ifdef DEBUG_ON
   write_instruction_log(arm, "SBC");
 #endif
@@ -1163,7 +1170,7 @@ RSC_INST:
   rn = (~rn) + 1;
   result = shifter_operand + rn - IS_BIT_NOT_SET(arm->cpsr, CF_BIT);
   *reg_p = result;
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZCV(); }
+  DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZCV(); }
 
 #ifdef DEBUG_ON
   write_instruction_log(arm, "RSC");
@@ -1187,6 +1194,7 @@ TEQ_INST:
 CMP_INST:
   shifter_operand = (~shifter_operand) + 1;
   result = rn + shifter_operand;
+  printf("rn - %d, shifter_operand - %d\n", rn, shifter_operand);
   COMPARE_INSTS_NZCV();
 #ifdef DEBUG_ON
   write_instruction_log(arm, "CMP");
@@ -1201,7 +1209,7 @@ CMN_INST:
   goto END;
 ORR_INST:
   *reg_p = rn | shifter_operand;
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(); }
+  DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZC(); }
 
 #ifdef DEBUG_ON
   write_instruction_log(arm, "OR");
@@ -1209,10 +1217,8 @@ ORR_INST:
 
   goto END;
 MOV_INST:
-  printf("%d %d\n", rd, shifter_operand);
-  printf("%d\n", reg_p == &arm->general_regs[8]);
   *reg_p = shifter_operand;
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(); }
+  DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZC(); }
 #ifdef DEBUG_ON
   write_instruction_log(arm, "MOV");
 #endif
@@ -1221,14 +1227,14 @@ MOV_INST:
   goto END;
 BIC_INST:
   *reg_p = rn & (~shifter_operand);
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(); }
+  DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZC(); }
 #ifdef DEBUG_ON
   write_instruction_log(arm, "BIC");
 #endif
   goto END;
 MVN_INST:
   *reg_p = ~shifter_operand;
-  DATA_PROCESS_RD_EQ_R15(arm) else if (s_bit) { DATA_PROCESS_NZC(); }
+  DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZC(); }
 #ifdef DEBUG_ON
   write_instruction_log(arm, "MVN");
 #endif
