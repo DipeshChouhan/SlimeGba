@@ -966,14 +966,16 @@ CONTROL:
     goto END;
 
   } else if ((OP_CODE & MRS_MASK) == MRS_DECODE) {
+    printf("OP_CODE %X\n", OP_CODE);
     reg_p = arm->reg_table[reg_count + RD_C];
     if (IS_BIT_SET(OP_CODE, 22)) {
       if (arm->mode > 1) {
         *reg_p = arm->spsr[arm->mode - 2];
-      } else {
-        *reg_p = arm->cpsr;
-      }
+      } 
+    } else {
+      *reg_p = arm->cpsr;
     }
+    write_instruction_log(arm, "MRS");
     goto END;
 
   } else if ((OP_CODE & MSR_IMM_MASK) == MSR_IMM_DECODE) {
