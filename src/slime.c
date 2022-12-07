@@ -26,6 +26,7 @@ int main(int argc, char **argv) {
     printf("please provide gba rom\n");
     return 0;
   }
+  printf("File: %s\n", argv[1]);
   unsigned int rom_size = 0;
   uint8_t *rom = load_binary_file(argv[1], &rom_size);
   if (rom == NULL) {

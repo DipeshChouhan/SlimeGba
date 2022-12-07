@@ -1054,6 +1054,7 @@ CONTROL:
 #undef fieldmask_bit3
   goto END;
 BRANCH_LINK:
+  printf("branch\n");
 
   // TODO make sure sign extend is correct
   shifter_operand = OP_CODE & 0xFFFFFF;
@@ -1071,7 +1072,7 @@ BRANCH_LINK:
 COPROCESSOR:
   goto END;
 UNDEFINED:
-  printf("UNDEFINED\n");
+  printf("UNDEFINED - %X\n", OP_CODE);
   goto END;
 
 UNCONDITIONAL:
@@ -1400,19 +1401,22 @@ LOAD_STORE_M_INSTS:
   goto END;
 
 MUL_INST:
+  printf("MUL\n");
   *reg_p = rm * rs;
   if (s_bit) {
     MUL_NZ(arm);
   }
   goto END;
 MLA_INST:
+  printf("MLA\n");
   *reg_p = (rm * rs) + *arm->reg_table[rn];
   if (s_bit) {
     MUL_NZ(arm);
   }
   goto END;
 UMULL_INST:
-  result = (rm * rs);
+  printf("UMULL\n");
+  result = (uint64_t)rm * rs;
   *reg_p = result >> 32;        // rdhi
   *arm->reg_table[rn] = result; // rdlow
   if (s_bit) {
@@ -1421,6 +1425,7 @@ UMULL_INST:
   goto END;
 
 UMLAL_INST:
+  printf("UMLAL\n");
   // RdLo = (Rm * Rs)[31:0] + RdLo
   // /* Unsigned multiplication */
   // RdHi = (Rm * Rs)[63:32] + RdHi + CarryFrom((Rm * Rs)[31:0] + RdLo)
@@ -1431,11 +1436,14 @@ UMLAL_INST:
   // /* See "C and V flags" note */
   // V Flag = unaffected
   // /* See "C and V flags" note */
-  result = (rm * rs);
+  result = (uint64_t)rm * rs;
+  printf("%lX\n", result);
   *reg_p += (result >> 32);
-  result += *arm->reg_table[rn];
+  printf("rdlow - %d\n", *arm->reg_table[rn]);
+  result = (result & 0xFFFFFFFF) + *arm->reg_table[rn];
   *reg_p += GET_BIT(result, 32);
   *arm->reg_table[rn] = result;
+  printf("rdhigh - %d\n", *reg_p);
   if (s_bit) {
     USMULL_NZ(arm);
   }
@@ -1444,6 +1452,7 @@ SMULL_INST:
   // TODO: make sure it is correct
   result = (int32_t)rm * (int32_t)rs;
   *reg_p = (result >> 32);
+  printf("SMULL - %lX\n", result);
   *arm->reg_table[rn] = result;
   if (s_bit) {
     USMULL_NZ(arm);
@@ -1452,9 +1461,9 @@ SMULL_INST:
 SMLAL_INST:
   result = (int32_t)rm * (int32_t)rs;
   *reg_p += (result >> 32); // rdHi
-  result += *arm->reg_table[rn];
+  result = (result & 0xFFFFFFFF) + *arm->reg_table[rn];
   *reg_p += GET_BIT(result, 32);
-  *arm->reg_table[rn] = result; // rdLo
+  *arm->reg_table[rn] = result;
   if (s_bit) {
     USMULL_NZ(arm);
   }
