@@ -275,6 +275,12 @@ void init_arm(Arm *arm) {
 }
 
 int arm_exec(Arm *arm) {
+#ifdef DEBUG_ON
+  if (arm->mode == UND) {
+    printf("exit code - %d\n", arm->general_regs[0]);
+    exit(0);
+  }
+#endif
 
   uint32_t temp = 0;
   uint32_t shifter_operand = 0;
@@ -358,75 +364,75 @@ FETCH:
 
 // check for conditions and set execute_instruction to 1
 CHECK_EQ:
-  if (IS_BIT_SET(OP_CODE, ZF_BIT)) {
+  if (IS_BIT_SET(arm->cpsr, ZF_BIT)) {
     goto DECODE;
   }
   goto END;
 CHECK_NE:
-  if (IS_BIT_SET(OP_CODE, ZF_BIT)) {
+  if (IS_BIT_SET(arm->cpsr, ZF_BIT)) {
     goto END;
   }
   goto DECODE;
 CHECK_CS_HS:
-  if (IS_BIT_SET(OP_CODE, CF_BIT)) {
+  if (IS_BIT_SET(arm->cpsr, CF_BIT)) {
     goto DECODE;
   }
   goto END;
 CHECK_CC_LO:
-  if (IS_BIT_SET(OP_CODE, CF_BIT)) {
+  if (IS_BIT_SET(arm->cpsr, CF_BIT)) {
     goto END;
   }
   goto DECODE;
 CHECK_MI:
-  if (IS_BIT_SET(OP_CODE, NF_BIT)) {
+  if (IS_BIT_SET(arm->cpsr, NF_BIT)) {
     goto DECODE;
   }
   goto END;
 CHECK_PL:
-  if (IS_BIT_SET(OP_CODE, NF_BIT)) {
+  if (IS_BIT_SET(arm->cpsr, NF_BIT)) {
     goto END;
   }
   goto DECODE;
 CHECK_VS:
-  if (IS_BIT_SET(OP_CODE, VF_BIT)) {
+  if (IS_BIT_SET(arm->cpsr, VF_BIT)) {
     goto DECODE;
   }
   goto END;
 CHECK_VC:
-  if (IS_BIT_SET(OP_CODE, VF_BIT)) {
+  if (IS_BIT_SET(arm->cpsr, VF_BIT)) {
     goto END;
   }
   goto DECODE;
 CHECK_HI:
   // c set and z clear
-  if ((OP_CODE & 0x60000000) == 0x20000000) {
+  if ((arm->cpsr & 0x60000000) == 0x20000000) {
     goto DECODE;
   }
   goto END;
 CHECK_LS:
-  if ((IS_BIT_SET(OP_CODE, CF_BIT) == 0) || IS_BIT_SET(OP_CODE, ZF_BIT)) {
+  if ((IS_BIT_SET(arm->cpsr, CF_BIT) == 0) || IS_BIT_SET(arm->cpsr, ZF_BIT)) {
     goto DECODE;
   }
   goto END;
 CHECK_GE:
-  if (GET_BIT(OP_CODE, NF_BIT) == GET_BIT(OP_CODE, VF_BIT)) {
+  if (GET_BIT(arm->cpsr, NF_BIT) == GET_BIT(arm->cpsr, VF_BIT)) {
     goto DECODE;
   }
   goto END;
 CHECK_LT:
-  if (GET_BIT(OP_CODE, NF_BIT) != GET_BIT(OP_CODE, VF_BIT)) {
+  if (GET_BIT(arm->cpsr, NF_BIT) != GET_BIT(arm->cpsr, VF_BIT)) {
     goto DECODE;
   }
   goto END;
 CHECK_GT:
-  if ((IS_BIT_SET(OP_CODE, ZF_BIT) == 0) &&
-      (GET_BIT(OP_CODE, NF_BIT) == GET_BIT(OP_CODE, VF_BIT))) {
+  if ((IS_BIT_SET(arm->cpsr, ZF_BIT) == 0) &&
+      (GET_BIT(arm->cpsr, NF_BIT) == GET_BIT(arm->cpsr, VF_BIT))) {
     goto DECODE;
   }
   goto END;
 CHECK_LE:
-  if (IS_BIT_SET(OP_CODE, ZF_BIT) ||
-      (GET_BIT(OP_CODE, NF_BIT) != GET_BIT(OP_CODE, VF_BIT))) {
+  if (IS_BIT_SET(arm->cpsr, ZF_BIT) ||
+      (GET_BIT(arm->cpsr, NF_BIT) != GET_BIT(arm->cpsr, VF_BIT))) {
     goto DECODE;
   }
   goto END;
@@ -488,15 +494,15 @@ DECODE:
   } else if ((OP_CODE & BRANCH_LINK_MASK) == BRANCH_LINK_DECODE) {
     // Branch and branch link instructions
     reg_count = (arm->mode * 16) + 14; // R14 is link register
-    write_decoder_log(arm, "Branch_Link Instruction");
+    // write_decoder_log(arm, "Branch_Link Instruction");
     goto BRANCH_LINK;
   } else if ((OP_CODE & SWI_MASK) == SWI_DECODE) {
     // swi instruction
-    write_decoder_log(arm, "Swi Instruction");
+    // write_decoder_log(arm, "Swi Instruction");
     goto SWI;
   } else if ((OP_CODE & COPROCESSOR_MASK) == COPROCESSOR_DECODE) {
     // coprocessor instructions
-    write_decoder_log(arm, "coprocessor instruction");
+    // write_decoder_log(arm, "coprocessor instruction");
     goto COPROCESSOR;
   } else {
     // undefined, unimplemented
@@ -993,6 +999,7 @@ CONTROL:
 #define fieldmask_bit2 18
 #define fieldmask_bit3 19
 
+  printf("MSR-OPCODE - %X\n", OP_CODE);
   if ((operand & unalloc_mask) == 0) {
     byte_mask = IS_BIT_SET(OP_CODE, fieldmask_bit0) * 0x000000FF;
     byte_mask |= IS_BIT_SET(OP_CODE, fieldmask_bit1) * 0x0000FF00;
@@ -1024,6 +1031,7 @@ CONTROL:
     // set state, mode
     arm->state = IS_BIT_SET(arm->cpsr, 5);
     arm->mode = processor_modes[arm->cpsr & 0xF];
+    // printf("mode - %d\n", arm->mode);
     if (arm->mode > 6) {
       printf("Not a valid processor mode\n");
       exit(1);
@@ -1058,6 +1066,7 @@ BRANCH_LINK:
   }
   arm->general_regs[R_15] += shifter_operand;
   arm->curr_instruction = arm->general_regs[R_15];
+  write_instruction_log(arm, "B,BL");
   goto END;
 COPROCESSOR:
   goto END;
@@ -1071,6 +1080,7 @@ UNCONDITIONAL:
   // unpredictable
 
 AND_INST:
+  printf("AND\n");
   *reg_p = rn & shifter_operand;
   DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZC(); }
 #ifdef DEBUG_ON
@@ -1086,12 +1096,15 @@ EOR_INST:
   goto END;
 SUB_INST:
 
-  shifter_operand = (~shifter_operand) + 1; // two's compliment
-  result = rn + shifter_operand;
+  printf("SUB\n");
+  shifter_operand = (~shifter_operand); // two's compliment
+  result = rn + ((uint64_t)shifter_operand + 1);
   *reg_p = result;
+  shifter_operand += 1;
   DATA_PROCESS_RD_EQ_R15(arm);
   if (s_bit) {
     DATA_PROCESS_NZCV();
+    // printf("cpsr - %d\n", arm->cpsr);
   }
 
 #ifdef DEBUG_ON
@@ -1101,8 +1114,9 @@ SUB_INST:
   // write_instruction_log(arm, "sub");
   goto END;
 RSB_INST:
-  rn = (~rn) + 1;
-  result = rn + shifter_operand;
+  rn = (~rn);
+  result = ((uint64_t)rn + 1) + shifter_operand;
+  rn += 1;
   *reg_p = result;
 
   DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZCV(); }
@@ -1113,7 +1127,8 @@ RSB_INST:
   goto END;
 
 ADD_INST:
-  result = rn + shifter_operand;
+  printf("ADD\n");
+  result = rn + (uint64_t)shifter_operand;
   *reg_p = result;
 
   DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZCV(); }
@@ -1124,7 +1139,8 @@ ADD_INST:
   goto END;
 ADC_INST:
 
-  result = rn + shifter_operand + IS_BIT_SET(arm->cpsr, CF_BIT);
+  printf("ADC\n");
+  result = rn + (uint64_t)shifter_operand + IS_BIT_SET(arm->cpsr, CF_BIT);
   *reg_p = result;
   DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZCV(); }
 #ifdef DEBUG_ON
@@ -1133,18 +1149,21 @@ ADC_INST:
   goto END;
 
 SBC_INST:
-  shifter_operand = (~shifter_operand) + 1;
-  result = rn + shifter_operand - IS_BIT_NOT_SET(arm->cpsr, CF_BIT);
+  printf("SBC\n");
+  shifter_operand = (~shifter_operand);
+  result = rn + ((uint64_t)shifter_operand+1) - IS_BIT_NOT_SET(arm->cpsr, CF_BIT);
   *reg_p = result;
+  shifter_operand += 1;
   DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZCV(); }
 #ifdef DEBUG_ON
   write_instruction_log(arm, "SBC");
 #endif
   goto END;
 RSC_INST:
-  rn = (~rn) + 1;
-  result = shifter_operand + rn - IS_BIT_NOT_SET(arm->cpsr, CF_BIT);
+  rn = (~rn);
+  result = shifter_operand + ((uint64_t)rn + 1) - IS_BIT_NOT_SET(arm->cpsr, CF_BIT);
   *reg_p = result;
+  rn += 1;
   DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZCV(); }
 
 #ifdef DEBUG_ON
@@ -1167,15 +1186,18 @@ TEQ_INST:
 #endif
   goto END;
 CMP_INST:
-  shifter_operand = (~shifter_operand) + 1;
-  result = rn + shifter_operand;
+  printf("CMP\n");
+  shifter_operand = (~shifter_operand);
+  result = rn + ((uint64_t)shifter_operand + 1);
+  shifter_operand += 1;
   COMPARE_INSTS_NZCV();
 #ifdef DEBUG_ON
   write_instruction_log(arm, "CMP");
 #endif
   goto END;
 CMN_INST:
-  result = rn + shifter_operand;
+  printf("CMN\n");
+  result = rn + (uint64_t)shifter_operand;
   COMPARE_INSTS_NZCV();
 #ifdef DEBUG_ON
   write_instruction_log(arm, "CMN");
@@ -1191,6 +1213,7 @@ ORR_INST:
 
   goto END;
 MOV_INST:
+  printf("MOV\n");
   *reg_p = shifter_operand;
   DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZC(); }
 #ifdef DEBUG_ON
@@ -1207,7 +1230,9 @@ BIC_INST:
 #endif
   goto END;
 MVN_INST:
+  printf("MVN - %X\n", shifter_operand);
   *reg_p = ~shifter_operand;
+  printf("reg_p - %X\n", *reg_p);
   DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZC(); }
 #ifdef DEBUG_ON
   write_instruction_log(arm, "MVN");
