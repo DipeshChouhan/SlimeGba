@@ -217,7 +217,7 @@ DECODE:
     rm = *arm->reg_table[reg_count + ((OP_CODE >> 3) & 0xF)];
     arm->cpsr = (arm->cpsr & 0xFFFFFFDF) | ((rm & 1) << 5);
     arm->state = rm & 1;
-    arm->curr_instruction = (rm & 0xFFFFFFFE);
+    arm->curr_instruction = rm & 0xFFFFFFFE;
     printf("rm - %d\n", arm->curr_instruction);
     write_instruction_log(arm, "BX");
     goto END;
@@ -544,9 +544,10 @@ ADD2:
 #endif
   goto END;
 SUB3:
-  rm = (~rm) + 1;
-  result = rn + rm;
+  rm = (~rm);
+  result = rn + ((uint64_t)rm + 1);
   *reg_p = result;
+  rm += 1;
   FLAGS_NZCV(*reg_p, rn, rm);
 
 #ifdef DEBUG_ON
@@ -554,8 +555,9 @@ SUB3:
 #endif
   goto END;
 SUB1:
-  imm_value = (~imm_value) + 1;
-  result = rn + imm_value;
+  imm_value = (~imm_value);
+  result = rn + ((uint64_t)imm_value + 1);
+  imm_value += 1;
   FLAGS_NZCV((result & 0xFFFFFFFF), rn, imm_value);
   *reg_p = result;
 #ifdef DEBUG_ON
@@ -563,8 +565,9 @@ SUB1:
 #endif
   goto END;
 SUB2:
-  imm_value = (~imm_value) + 1;
-  result = *reg_p + imm_value;
+  imm_value = (~imm_value);
+  result = *reg_p + ((uint64_t)imm_value + 1);
+  imm_value += 1;
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, imm_value);
   *reg_p = result;
 #ifdef DEBUG_ON
@@ -584,8 +587,9 @@ LSL1:
 #endif
   goto END;
 CMP1:
-  imm_value = (~imm_value) + 1;
-  result = *reg_p + imm_value;
+  imm_value = (~imm_value);
+  result = *reg_p + ((uint64_t)imm_value + 1);
+  imm_value += 1;
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, imm_value);
 #ifdef DEBUG_ON
   write_instruction_log(arm, "CMP1");
@@ -715,7 +719,7 @@ ASR2:
 #endif
   goto END;
 ADC:
-  result = *reg_p + rm + IS_BIT_SET(arm->cpsr, CF_BIT);
+  result = *reg_p + (uint64_t)rm + IS_BIT_SET(arm->cpsr, CF_BIT);
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, rm);
   *reg_p = result;
 #ifdef DEBUG_ON
@@ -723,8 +727,9 @@ ADC:
 #endif
   goto END;
 SBC:
-  rm = (~rm) + 1;
-  result = *reg_p + rm + IS_BIT_NOT_SET(arm->cpsr, CF_BIT);
+  rm = (~rm);
+  result = *reg_p + ((uint64_t)rm + 1) - IS_BIT_NOT_SET(arm->cpsr, CF_BIT);
+  rm += 1;
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, rm);
   *reg_p = result;
 #ifdef DEBUG_ON
@@ -763,8 +768,9 @@ NEG:
 #endif
   goto END;
 CMP2:
-  rm = (~rm) + 1;
-  result = *reg_p + rm;
+  rm = (~rm);
+  result = *reg_p + ((uint64_t)rm + 1);
+  rm += 1;
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, rm);
 
 #ifdef DEBUG_ON
@@ -808,7 +814,7 @@ MVN:
 #endif
   goto END;
 ADD5:
-  *reg_p = ((uint64_t)rn & 0xFFFFFFFC) + (imm_value * 4);
+  *reg_p = (rn & 0xFFFFFFFC) + (imm_value * 4);
 #ifdef DEBUG_ON
   write_instruction_log(arm, "ADD5");
 #endif
@@ -827,8 +833,10 @@ ADD7:
   goto END;
 SUB4:
   imm_value <<= 2;
+  imm_value = ~imm_value;
   // printf("imm_value - %d\n", imm_value);
-  *reg_p = *reg_p + (~imm_value) + 1;
+  *reg_p = *reg_p + ((uint64_t)imm_value + 1);
+  imm_value += 1;
 #ifdef DEBUG_ON
   write_instruction_log(arm, "SUB4");
 #endif
@@ -843,8 +851,9 @@ ADD4:
 #endif
   goto END;
 CMP3:
-  rm = (~rm) + 1;
-  result = *reg_p + rm;
+  rm = (~rm);
+  result = *reg_p + ((uint64_t)rm + 1);
+  rm += 1;
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, rm);
 #ifdef DEBUG_ON
   write_instruction_log(arm, "CMP3");

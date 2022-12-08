@@ -1,4 +1,5 @@
 #include "disassembler.h"
+#include "arm.h"
 #include "string.h"
 #include <stdio.h>
 
@@ -51,6 +52,7 @@ void write_instruction_log(Arm *arm, char *name) {
   cJSON *r14 = cJSON_CreateNumber(arm->general_regs[14]);
   cJSON *r15 = cJSON_CreateNumber(arm->general_regs[15]);
   cJSON *cpsr = cJSON_CreateNumber(arm->cpsr);
+  cJSON *curr_instruction = cJSON_CreateNumber(arm->curr_instruction - ((arm->state == THUMB_STATE) ? 2 : 4));
 
   cJSON_AddItemToObject(inst, "instruction", inst_name);
   cJSON_AddItemToObject(inst, "r0", r0);
@@ -70,6 +72,7 @@ void write_instruction_log(Arm *arm, char *name) {
   cJSON_AddItemToObject(inst, "r14", r14);
   cJSON_AddItemToObject(inst, "r15", r15);
   cJSON_AddItemToObject(inst, "cpsr", cpsr);
+  cJSON_AddItemToObject(inst, "curr_inst", curr_instruction);
 
   cJSON_AddItemToObject(disassembler.json_arr, "instruction", inst);
   
