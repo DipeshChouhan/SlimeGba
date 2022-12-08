@@ -277,7 +277,14 @@ void init_arm(Arm *arm) {
 int arm_exec(Arm *arm) {
 #ifdef DEBUG_ON
   if (arm->mode == UND) {
-    printf("exit code - %d\n", arm->general_regs[0]);
+
+    printf("%s\n", cJSON_Print(disassembler.json_obj));
+    char *json_data = cJSON_Print(disassembler.json_obj);
+    fputs(json_data, disassembler.json_log_file);
+    cJSON_Delete(disassembler.json_obj);
+    fclose(disassembler.json_log_file);
+    free(json_data);
+    printf("exit code - %d\n", arm->general_regs[1]);
     exit(0);
   }
 #endif
@@ -810,6 +817,11 @@ DATA_PROCESS:
   temp = OP_CODE & SHIFTER_REG_MASK;
   rm = *arm->reg_table[reg_count + RM_C];
   if (temp == SHIFTER_REG_DECODE) {
+    if (OP_CODE == 0xE15FF000) {
+
+      printf("rm - %X\n", rm);
+      printf("rn - %X\n", rn);
+    }
     shifter_operand = rm; // TODO - change to register
     shifter_carry_out = IS_BIT_SET(arm->cpsr, CF_BIT);
     goto *dp_inst_table[INST_OPCODE];
@@ -971,10 +983,15 @@ CONTROL:
     if (IS_BIT_SET(OP_CODE, 22)) {
       if (arm->mode > 1) {
         *reg_p = arm->spsr[arm->mode - 2];
+      } else {
+        // TODO unpredictable
+        *reg_p = arm->cpsr;
+        
       } 
     } else {
       *reg_p = arm->cpsr;
     }
+    printf("mrs mode - %d\n", arm->mode);
     write_instruction_log(arm, "MRS");
     goto END;
 
@@ -1181,6 +1198,7 @@ TST_INST:
 #endif
   goto END;
 TEQ_INST:
+  printf("TEQ\n");
   result = rn ^ shifter_operand;
   COMPARE_INSTS_NZC();
 
@@ -1189,7 +1207,7 @@ TEQ_INST:
 #endif
   goto END;
 CMP_INST:
-  printf("CMP\n");
+  printf("CMP - %X\n", OP_CODE);
   shifter_operand = (~shifter_operand);
   result = rn + ((uint64_t)shifter_operand + 1);
   shifter_operand += 1;

@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#define DEBUG_ON
 
 #define OP_CODE arm->data_bus
 
@@ -27,12 +28,14 @@
   temp |= ((result & 0x100000000) >> 3);                                       \
   temp |= (((_vf1 & 0x80000000) == (_vf2 & 0x80000000)) &&                     \
            ((result & 0x80000000) != (_vf1 & 0x80000000)))                     \
-          << 28;
+          << 28;                                                               \
+  arm->cpsr = temp;
 
 #define FLAGS_NZ(_nf, _zf)                                                     \
   temp = arm->cpsr & 0x3FFFFFFF;                                               \
   temp |= (_nf & 0x80000000);                                                  \
-  temp |= ((_zf == 0) << 30);
+  temp |= ((_zf == 0) << 30);                                                  \
+  arm->cpsr = temp;
 
 #define FLAG_C(_to) arm->cpsr = SET_BIT(arm->cpsr, 29, _to);
 
@@ -42,6 +45,10 @@
   _address += 2;
 
 int thumb_exec(Arm *arm) {
+  // if (arm->mode == UND) {
+  //   printf("exit_code - %d\n", arm->general_regs[1]);
+  //   exit(0);
+  // }
 
   uint32_t temp = 0;
   uint64_t result = 0;
@@ -67,100 +74,103 @@ int thumb_exec(Arm *arm) {
   INTERRUPT_REQUEST();
 
   THUMB_FETCH(arm->curr_instruction, arm->data_bus);
-  printf("%X\n", arm->data_bus);
 
 DECODE:
 
   if ((OP_CODE & SWI_MASK) == SWI_DECODE) {
-    printf("SWI\n");
-    write_decoder_log(arm, "SWI");
+    // printf("SWI\n");
+    // write_decoder_log(arm, "SWI");
     // swi
     SWI_INSTRUCTION(arm);
     goto END;
   }
 
   if ((OP_CODE & COND_BRANCH_MASK) == COND_BRANCH_DECODE) {
-    printf("cond branch\n");
-    write_decoder_log(arm, "COND_BRANCH");
+    // write_decoder_log(arm, "COND_BRANCH");
     // B1
     //
+    goto *cond_field_table[(OP_CODE >> 8) & 0xF];
 
+  #ifdef DEBUG_ON
+    write_instruction_log(arm, "B");
+    printf("b opcode - %X\n", OP_CODE);
+#endif
   CHECK_EQ:
-    if (IS_BIT_SET(OP_CODE, ZF_BIT)) {
+    if (IS_BIT_SET(arm->cpsr, ZF_BIT)) {
       goto B1_INST;
     }
     goto END;
   CHECK_NE:
-    if (IS_BIT_SET(OP_CODE, ZF_BIT)) {
+    if (IS_BIT_SET(arm->cpsr, ZF_BIT)) {
       goto END;
     }
     goto B1_INST;
   CHECK_CS_HS:
-    if (IS_BIT_SET(OP_CODE, CF_BIT)) {
+    if (IS_BIT_SET(arm->cpsr, CF_BIT)) {
       goto B1_INST;
     }
     goto END;
   CHECK_CC_LO:
-    if (IS_BIT_SET(OP_CODE, CF_BIT)) {
+    if (IS_BIT_SET(arm->cpsr, CF_BIT)) {
       goto END;
     }
     goto B1_INST;
   CHECK_MI:
-    if (IS_BIT_SET(OP_CODE, NF_BIT)) {
+    if (IS_BIT_SET(arm->cpsr, NF_BIT)) {
       goto B1_INST;
     }
     goto END;
   CHECK_PL:
-    if (IS_BIT_SET(OP_CODE, NF_BIT)) {
+    if (IS_BIT_SET(arm->cpsr, NF_BIT)) {
       goto END;
     }
     goto B1_INST;
   CHECK_VS:
-    if (IS_BIT_SET(OP_CODE, VF_BIT)) {
+    if (IS_BIT_SET(arm->cpsr, VF_BIT)) {
       goto B1_INST;
     }
     goto END;
   CHECK_VC:
-    if (IS_BIT_SET(OP_CODE, VF_BIT)) {
+    if (IS_BIT_SET(arm->cpsr, VF_BIT)) {
       goto END;
     }
     goto B1_INST;
   CHECK_HI:
     // c set and z clear
-    if ((OP_CODE & 0x60000000) == 0x20000000) {
+    if ((arm->cpsr & 0x60000000) == 0x20000000) {
       goto B1_INST;
     }
     goto END;
   CHECK_LS:
-    if ((IS_BIT_SET(OP_CODE, CF_BIT) == 0) || IS_BIT_SET(OP_CODE, ZF_BIT)) {
+    if ((IS_BIT_SET(arm->cpsr, CF_BIT) == 0) || IS_BIT_SET(OP_CODE, ZF_BIT)) {
       goto B1_INST;
     }
     goto END;
   CHECK_GE:
-    if (GET_BIT(OP_CODE, NF_BIT) == GET_BIT(OP_CODE, VF_BIT)) {
+    if (GET_BIT(arm->cpsr, NF_BIT) == GET_BIT(OP_CODE, VF_BIT)) {
       goto B1_INST;
     }
     goto END;
   CHECK_LT:
-    if (GET_BIT(OP_CODE, NF_BIT) != GET_BIT(OP_CODE, VF_BIT)) {
+    if (GET_BIT(arm->cpsr, NF_BIT) != GET_BIT(OP_CODE, VF_BIT)) {
       goto B1_INST;
     }
     goto END;
   CHECK_GT:
-    if ((IS_BIT_SET(OP_CODE, ZF_BIT) == 0) &&
-        (GET_BIT(OP_CODE, NF_BIT) == GET_BIT(OP_CODE, VF_BIT))) {
+    if ((IS_BIT_SET(arm->cpsr, ZF_BIT) == 0) &&
+        (GET_BIT(arm->cpsr, NF_BIT) == GET_BIT(arm->cpsr, VF_BIT))) {
       goto B1_INST;
     }
     goto END;
   CHECK_LE:
-    if (IS_BIT_SET(OP_CODE, ZF_BIT) ||
-        (GET_BIT(OP_CODE, NF_BIT) != GET_BIT(OP_CODE, VF_BIT))) {
+    if (IS_BIT_SET(arm->cpsr, ZF_BIT) ||
+        (GET_BIT(arm->cpsr, NF_BIT) != GET_BIT(arm->cpsr, VF_BIT))) {
       goto B1_INST;
     }
     goto END;
 
   B1_INST:
-    write_decoder_log(arm, "B1");
+    // write_decoder_log(arm, "B1");
     imm_value = OP_CODE & 0xFF;
     imm_value = SIGN_EXTEND(imm_value, 7);
     arm->general_regs[15] += (imm_value << 1);
@@ -168,7 +178,7 @@ DECODE:
     goto END;
 
   } else if ((OP_CODE & UNCOND_BRANCH_MASK) == UNCOND_BRANCH_DECODE) {
-    write_decoder_log(arm, "UNCOND_BRANCH");
+    // write_decoder_log(arm, "UNCOND_BRANCH");
     temp = OP_CODE & 0x1800;       // bits 11 and 12
                                    // 0xFFFFF800
     imm_value = (OP_CODE & 0x7FF); // signed_immed_11
@@ -201,17 +211,19 @@ DECODE:
     goto UNDEFINED;
 
   } else if ((OP_CODE & BRANCH_EXCHANGE_MASK) == BRANCH_EXCHANGE_DECODE) {
-    write_decoder_log(arm, "BX");
+    // write_decoder_log(arm, "BX");
     reg_count = arm->mode * 16;
 
     rm = *arm->reg_table[reg_count + ((OP_CODE >> 3) & 0xF)];
     arm->cpsr = (arm->cpsr & 0xFFFFFFDF) | ((rm & 1) << 5);
-    arm->mode = rm & 1;
-    arm->curr_instruction = (rm & 0xFFFFFFFE) << 1;
+    arm->state = rm & 1;
+    arm->curr_instruction = (rm & 0xFFFFFFFE);
+    printf("rm - %d\n", arm->curr_instruction);
+    write_instruction_log(arm, "BX");
     goto END;
 
   } else if ((OP_CODE & DATA_PROCESS_F1_MASK) == DATA_PROCESS_F1_DECODE) {
-    write_decoder_log(arm, "Thumb Data Processing Instruction");
+    // write_decoder_log(arm, "Thumb Data Processing Instruction");
     rn = arm->general_regs[(OP_CODE >> 3) & 7];
     rm = arm->general_regs[(OP_CODE >> 6) & 7];
     reg_p = &arm->general_regs[OP_CODE & 7];
@@ -221,7 +233,7 @@ DECODE:
     goto ADD3;
 
   } else if ((OP_CODE & DATA_PROCESS_F2_MASK) == DATA_PROCESS_F2_DECODE) {
-    write_decoder_log(arm, "Thumb Data Processing Instruction");
+    // write_decoder_log(arm, "Thumb Data Processing Instruction");
     rn = arm->general_regs[(OP_CODE >> 3) & 7];
     reg_p = &arm->general_regs[OP_CODE & 7];
     imm_value = (OP_CODE >> 6) & 7;
@@ -232,26 +244,26 @@ DECODE:
     goto ADD1;
 
   } else if ((OP_CODE & DATA_PROCESS_F3_MASK) == DATA_PROCESS_F3_DECODE) {
-    write_decoder_log(arm, "Thumb Data Processing Instruction");
+    // write_decoder_log(arm, "Thumb Data Processing Instruction");
     reg_p = &arm->general_regs[(OP_CODE >> 8) & 7];
     imm_value = OP_CODE & 0xFF;
     goto *dp_inst_table[4 + ((OP_CODE >> 11) & 3)];
 
   } else if ((OP_CODE & DATA_PROCESS_F4_MASK) == DATA_PROCESS_F4_DECODE) {
-    write_decoder_log(arm, "Thumb Data Processing Instruction");
+    // write_decoder_log(arm, "Thumb Data Processing Instruction");
     rm = arm->general_regs[(OP_CODE >> 3) & 7];
     reg_p = &arm->general_regs[OP_CODE & 7];
     imm_value = (OP_CODE >> 6) & 31;
     goto *dp_inst_table[8 + ((OP_CODE >> 11) & 3)];
 
   } else if ((OP_CODE & DATA_PROCESS_F5_MASK) == DATA_PROCESS_F5_DECODE) {
-    write_decoder_log(arm, "Thumb Data Processing Instruction");
+    // write_decoder_log(arm, "Thumb Data Processing Instruction");
     rm = arm->general_regs[(OP_CODE >> 3) & 7];
     reg_p = &arm->general_regs[OP_CODE & 7];
     goto *dp_inst_table[11 + ((OP_CODE >> 6) & 0xF)];
 
   } else if ((OP_CODE & DATA_PROCESS_F6_MASK) == DATA_PROCESS_F6_DECODE) {
-    write_decoder_log(arm, "Thumb Data Processing Instruction");
+    // write_decoder_log(arm, "Thumb Data Processing Instruction");
     reg_p = &arm->general_regs[(OP_CODE >> 8) & 7];
     imm_value = OP_CODE & 0xFF;
     reg_count = arm->mode * 16;
@@ -263,7 +275,7 @@ DECODE:
     goto ADD5;
 
   } else if ((OP_CODE & DATA_PROCESS_F7_MASK) == DATA_PROCESS_F7_DECODE) {
-    write_decoder_log(arm, "Thumb Data Processing Instruction");
+    // write_decoder_log(arm, "Thumb Data Processing Instruction");
     reg_count = arm->mode * 16;
     reg_p = arm->reg_table[reg_count + 13];
     imm_value = OP_CODE & 0x7F;
@@ -273,7 +285,7 @@ DECODE:
     goto ADD7;
 
   } else if ((OP_CODE & DATA_PROCESS_F8_MASK) == DATA_PROCESS_F8_DECODE) {
-    write_decoder_log(arm, "Thumb Data Processing Instruction");
+    // write_decoder_log(arm, "Thumb Data Processing Instruction");
     reg_count = arm->mode * 16;
     temp = IS_BIT_SET(OP_CODE, 7) * 8;
     reg_p = arm->reg_table[reg_count + (OP_CODE & 7) + temp];
@@ -294,55 +306,54 @@ DECODE:
   temp = OP_CODE & LOAD_STORE_F1_MASK;
 
   if (temp == LDR1_DECODE) {
-    write_decoder_log(arm, "LDR1");
+    // write_decoder_log(arm, "LDR1");
     imm_value = immed_5 * 4;
     address = RN_F1 + imm_value;
     MEM_READ(address, RD_F1, mem_read32);
     goto END;
 
   } else if (temp == LDRB1_DECODE) {
-    write_decoder_log(arm, "LDRB1");
+    // write_decoder_log(arm, "LDRB1");
     address = RN_F1 + immed_5;
     MEM_READ(address, RD_F1, mem_read8);
     goto END;
 
   } else if (temp == LDRH1_DECODE) {
-    write_decoder_log(arm, "LDRH1");
+    // write_decoder_log(arm, "LDRH1");
     imm_value = immed_5 * 2;
     address = RN_F1 + imm_value;
     MEM_READ(address, RD_F1, mem_read16);
     goto END;
 
   } else if (temp == STR1_DECODE) {
-    write_decoder_log(arm, "STR1");
+    // write_decoder_log(arm, "STR1");
     imm_value = immed_5 * 4;
     address = RN_F1 + imm_value;
     MEM_WRITE(address, RD_F1, mem_write32);
     goto END;
 
   } else if (temp == STRB1_DECODE) {
-    write_decoder_log(arm, "STRB1");
+    // write_decoder_log(arm, "STRB1");
     address = RN_F1 + immed_5;
     MEM_WRITE(address, RD_F1, mem_write8);
     goto END;
 
   } else if (temp == STRH1_DECODE) {
-    write_decoder_log(arm, "STRH1");
+    // write_decoder_log(arm, "STRH1");
     imm_value = immed_5 * 2;
     address = RN_F1 + imm_value;
     MEM_WRITE(address, RD_F1, mem_write16);
     goto END;
 
   } else if (temp == LDR3_DECODE) {
-    write_decoder_log(arm, "LDR3");
-
+    // write_decoder_log(arm, "LDR3");
 
     imm_value = immed_8 * 4;
     address = (arm->general_regs[15] & 0xFFFFFFFC) + imm_value;
     MEM_READ(address, RD_F3, mem_read32);
     goto END;
   } else if (temp == LDR4_DECODE) {
-    write_decoder_log(arm, "LDR4");
+    // write_decoder_log(arm, "LDR4");
     reg_count = arm->mode * 16;
     imm_value = immed_8 * 4;
     address = *arm->reg_table[reg_count + 13] + imm_value;
@@ -350,7 +361,7 @@ DECODE:
     goto END;
 
   } else if (temp == STR3_DECODE) {
-    write_decoder_log(arm, "STR3");
+    // write_decoder_log(arm, "STR3");
     reg_count = arm->mode * 16;
     imm_value = immed_8 * 4;
     address = *arm->reg_table[reg_count + 13] + imm_value;
@@ -402,48 +413,48 @@ DECODE:
   temp = OP_CODE & LOAD_STORE_F2_MASK;
 
   if (temp == LDR2_DECODE) {
-    write_decoder_log(arm, "LDR2");
+    // write_decoder_log(arm, "LDR2");
     MEM_READ(address, RD_F1, mem_read32);
     goto END;
 
   } else if (temp == LDRB2_DECODE) {
-    write_decoder_log(arm, "LDRB2");
+    // write_decoder_log(arm, "LDRB2");
     MEM_READ(address, RD_F1, mem_read8);
     goto END;
   } else if (temp == LDRH2_DECODE) {
-    write_decoder_log(arm, "LDRH2");
+    // write_decoder_log(arm, "LDRH2");
     MEM_READ(address, RD_F1, mem_read16);
     goto END;
 
   } else if (temp == STR2_DECODE) {
-    write_decoder_log(arm, "STR2");
+    // write_decoder_log(arm, "STR2");
     MEM_WRITE(address, RD_F1, mem_write32);
     goto END;
   } else if (temp == STRB2_DECODE) {
-    write_decoder_log(arm, "STRB2");
+    // write_decoder_log(arm, "STRB2");
     MEM_WRITE(address, RD_F1, mem_write8);
     goto END;
 
   } else if (temp == STRH2_DECODE) {
-    write_decoder_log(arm, "STRH2");
+    // write_decoder_log(arm, "STRH2");
     MEM_WRITE(address, RD_F1, mem_write16);
     goto END;
 
   } else if (temp == LDRSB_DECODE) {
-    write_decoder_log(arm, "LDRSB");
+    // write_decoder_log(arm, "LDRSB");
     MEM_READ(address, imm_value, mem_read8);
     imm_value = SIGN_EXTEND(imm_value, 7);
     RD_F1 = imm_value;
     goto END;
 
   } else if (temp == LDRSH_DECODE) {
-    write_decoder_log(arm, "LDRSH");
+    // write_decoder_log(arm, "LDRSH");
     MEM_READ(address, imm_value, mem_read16);
     imm_value = SIGN_EXTEND(imm_value, 15);
     RD_F1 = imm_value;
     goto END;
   } else if (temp == PUSH) {
-    write_decoder_log(arm, "PUSH");
+    // write_decoder_log(arm, "PUSH");
     imm_value = immed_8; // reg list
 
     rm = 0; // number of set bits
@@ -475,7 +486,7 @@ DECODE:
     goto END;
 
   } else if (temp == POP) {
-    write_decoder_log(arm, "POP");
+    // write_decoder_log(arm, "POP");
     address = *arm->reg_table[(arm->mode * 16) + 13]; // SP
     imm_value = immed_8;                              // reg list
     rn = IS_BIT_SET(OP_CODE, 8);                      // R Bit
@@ -507,39 +518,58 @@ DECODE:
   goto UNDEFINED;
 
 ADD3:
-  result = rn + rm;
+  result = (uint64_t)rn + rm;
   *reg_p = result;
   FLAGS_NZCV(*reg_p, rn, rm);
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "ADD3");
+#endif
   goto END;
 ADD1:
-  result = rn + imm_value;
+  result = (uint64_t)rn + imm_value;
   *reg_p = result;
   FLAGS_NZCV(*reg_p, rn, imm_value);
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "ADD1");
+#endif
 
   goto END;
 
 ADD2:
-  result = *reg_p + imm_value;
+  result = *reg_p + (uint64_t)imm_value;
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, imm_value);
   *reg_p = result;
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "ADD2");
+#endif
   goto END;
 SUB3:
   rm = (~rm) + 1;
   result = rn + rm;
   *reg_p = result;
   FLAGS_NZCV(*reg_p, rn, rm);
+
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "SUB3");
+#endif
   goto END;
 SUB1:
   imm_value = (~imm_value) + 1;
   result = rn + imm_value;
   FLAGS_NZCV((result & 0xFFFFFFFF), rn, imm_value);
   *reg_p = result;
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "SUB1");
+#endif
   goto END;
 SUB2:
   imm_value = (~imm_value) + 1;
   result = *reg_p + imm_value;
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, imm_value);
   *reg_p = result;
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "SUB2");
+#endif
   goto END;
 LSL1:
   if (imm_value == 0) {
@@ -549,16 +579,25 @@ LSL1:
     *reg_p = rm << imm_value;
   }
   FLAGS_NZ(*reg_p, *reg_p);
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "LSL1");
+#endif
   goto END;
 CMP1:
   imm_value = (~imm_value) + 1;
   result = *reg_p + imm_value;
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, imm_value);
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "CMP1");
+#endif
   goto END;
 
 MOV1:
   *reg_p = imm_value;
   FLAGS_NZ(*reg_p, *reg_p);
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "MOV1");
+#endif
   goto END;
 
 LSR1:
@@ -570,6 +609,9 @@ LSR1:
     *reg_p = rm >> imm_value;
   }
   FLAGS_NZ(*reg_p, *reg_p);
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "LSR1");
+#endif
   goto END;
 ASR1:
   if (imm_value == 0) {
@@ -586,15 +628,24 @@ ASR1:
     //          (IS_BIT_SET(rm, 31) * (0xFFFFFFFF << (32 - imm_value)));
   }
   FLAGS_NZ(*reg_p, *reg_p);
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "ASR1");
+#endif
   goto END;
 
 AND:
   *reg_p = (*reg_p) & rm;
   FLAGS_NZ(*reg_p, *reg_p);
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "AND");
+#endif
   goto END;
 EOR:
   *reg_p = (*reg_p) ^ rm;
   FLAGS_NZ(*reg_p, *reg_p);
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "EOR");
+#endif
   goto END;
 LSL2:
   imm_value = rm & 0xFF;
@@ -615,6 +666,9 @@ LSL2:
     *reg_p = 0;
   }
   FLAGS_NZ(*reg_p, *reg_p);
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "LSL2");
+#endif
   goto END;
 LSR2:
 
@@ -633,6 +687,9 @@ LSR2:
     *reg_p = 0;
   }
   FLAGS_NZ(*reg_p, *reg_p);
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "LSR2");
+#endif
   goto END;
 ASR2:
   rm = rm & 0xFF;
@@ -653,17 +710,26 @@ ASR2:
     }
   }
   FLAGS_NZ(*reg_p, *reg_p);
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "ASR2");
+#endif
   goto END;
 ADC:
   result = *reg_p + rm + IS_BIT_SET(arm->cpsr, CF_BIT);
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, rm);
   *reg_p = result;
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "ADC");
+#endif
   goto END;
 SBC:
   rm = (~rm) + 1;
   result = *reg_p + rm + IS_BIT_NOT_SET(arm->cpsr, CF_BIT);
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, rm);
   *reg_p = result;
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "SBC");
+#endif
   goto END;
 ROR:
   if ((rm & 0xFF) == 0) {
@@ -676,76 +742,123 @@ ROR:
     *reg_p = ROTATE_RIGHT32(*reg_p, rm);
   }
   FLAGS_NZ(*reg_p, *reg_p);
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "ROR");
+#endif
   goto END;
 TST:
   result = *reg_p & rm;
   FLAGS_NZ(result, (result & 0xFFFFFFFF));
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "TST");
+#endif
   goto END;
 NEG:
   rm = (~rm) + 1;
   result = rm;
   *reg_p = result;
   FLAGS_NZCV(*reg_p, 0, rm);
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "NEG");
+#endif
   goto END;
 CMP2:
   rm = (~rm) + 1;
   result = *reg_p + rm;
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, rm);
+
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "CMP2");
+#endif
   goto END;
 
 CMN:
   result = *reg_p + rm;
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, rm);
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "CMN");
+#endif
   goto END;
 ORR:
   *reg_p = (*reg_p) | rm;
   FLAGS_NZ(*reg_p, *reg_p);
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "ORR");
+#endif
   goto END;
 MUL:
   *reg_p = (rm * (*reg_p));
   FLAGS_NZ(*reg_p, *reg_p);
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "MUL");
+#endif
   goto END;
 BIC:
   *reg_p = *reg_p & (~rm);
   FLAGS_NZ(*reg_p, *reg_p);
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "BIC");
+#endif
   goto END;
 MVN:
   *reg_p = (~rm);
   FLAGS_NZ(*reg_p, *reg_p);
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "MVN");
+#endif
   goto END;
 ADD5:
-  printf("ADD5\n");
-  *reg_p = (rn & 0xFFFFFFFC) + (imm_value * 4);
+  *reg_p = ((uint64_t)rn & 0xFFFFFFFC) + (imm_value * 4);
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "ADD5");
+#endif
   goto END;
 ADD6:
-  printf("ADD6\n");
-  *reg_p = rn + (imm_value << 2);
+  *reg_p = (uint64_t)rn + (imm_value << 2);
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "ADD6");
+#endif
   goto END;
 ADD7:
-  printf("ADD7\n");
-  *reg_p = *reg_p + (imm_value << 2);
+  *reg_p = (uint64_t)*reg_p + (imm_value << 2);
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "ADD7");
+#endif
   goto END;
 SUB4:
   imm_value <<= 2;
+  // printf("imm_value - %d\n", imm_value);
   *reg_p = *reg_p + (~imm_value) + 1;
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "SUB4");
+#endif
   goto END;
 ADD4:
-  printf("ADD4\n");
-  *reg_p = *reg_p + rm;
+  *reg_p = *reg_p + (uint64_t)rm;
   if (reg_p == arm->reg_table[15]) {
     arm->curr_instruction = *reg_p & 0xFFFFFFFE;
   }
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "ADD4");
+#endif
   goto END;
 CMP3:
   rm = (~rm) + 1;
   result = *reg_p + rm;
   FLAGS_NZCV((result & 0xFFFFFFFF), *reg_p, rm);
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "CMP3");
+#endif
   goto END;
 MOV3:
   *reg_p = rm;
   if (reg_p == arm->reg_table[15]) {
     arm->curr_instruction = *reg_p & 0xFFFFFFFE;
   }
+
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "MOV3");
+#endif
   goto END;
 CPY:
 UNDEFINED:
