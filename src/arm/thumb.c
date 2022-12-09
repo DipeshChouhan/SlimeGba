@@ -89,12 +89,12 @@ DECODE:
     // write_decoder_log(arm, "COND_BRANCH");
     // B1
     //
-    goto *cond_field_table[(OP_CODE >> 8) & 0xF];
-
   #ifdef DEBUG_ON
     write_instruction_log(arm, "B");
     printf("b opcode - %X\n", OP_CODE);
 #endif
+    goto *cond_field_table[(OP_CODE >> 8) & 0xF];
+
   CHECK_EQ:
     if (IS_BIT_SET(arm->cpsr, ZF_BIT)) {
       goto B1_INST;
@@ -217,7 +217,8 @@ DECODE:
     rm = *arm->reg_table[reg_count + ((OP_CODE >> 3) & 0xF)];
     arm->cpsr = (arm->cpsr & 0xFFFFFFDF) | ((rm & 1) << 5);
     arm->state = rm & 1;
-    arm->curr_instruction = rm & 0xFFFFFFFE;
+    arm->general_regs[15] = rm & 0xFFFFFFFE;
+    arm->curr_instruction = arm->general_regs[15];
     printf("rm - %d\n", arm->curr_instruction);
     write_instruction_log(arm, "BX");
     goto END;
@@ -844,7 +845,8 @@ SUB4:
 ADD4:
   *reg_p = *reg_p + (uint64_t)rm;
   if (reg_p == arm->reg_table[15]) {
-    arm->curr_instruction = *reg_p & 0xFFFFFFFE;
+    arm->general_regs[15] = *reg_p & 0xFFFFFFFE;
+    arm->curr_instruction = arm->general_regs[15];
   }
 #ifdef DEBUG_ON
   write_instruction_log(arm, "ADD4");
@@ -862,7 +864,8 @@ CMP3:
 MOV3:
   *reg_p = rm;
   if (reg_p == arm->reg_table[15]) {
-    arm->curr_instruction = *reg_p & 0xFFFFFFFE;
+    arm->general_regs[15] = *reg_p * 0xFFFFFFFE;
+    arm->curr_instruction = arm->general_regs[15];
   }
 
 #ifdef DEBUG_ON
@@ -872,6 +875,7 @@ MOV3:
 CPY:
 UNDEFINED:
   printf("Undefined\n");
+  exit(1);
 END:
   return 0;
 }
