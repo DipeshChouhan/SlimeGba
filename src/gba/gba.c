@@ -34,4 +34,8 @@ void power_on_gba(uint8_t *rom, unsigned int rom_size) {
     ++total;
   }
   printf("called %d\n", total);
+  if (gba.arm.mode == UND) {
+    printf("exit-code: %d\n", gba.arm.general_regs[1]);
+    exit(0);
+  }
 }

@@ -74,6 +74,7 @@ int thumb_exec(Arm *arm) {
   INTERRUPT_REQUEST();
 
   THUMB_FETCH(arm->curr_instruction, arm->data_bus);
+  printf("OP_CODE - %X\n", OP_CODE);
 
 DECODE:
 
@@ -195,6 +196,9 @@ DECODE:
       *arm->reg_table[reg_count + 14] =
           arm->general_regs[15] + (imm_value << 12);
 
+#ifdef DEBUG_ON
+      write_instruction_log(arm, "BL10");
+#endif
       goto END;
     } else if (temp == 0x1800) {
       // BL H = 11 form
@@ -205,6 +209,10 @@ DECODE:
       // LR = (address of next instruction) | 1
       *arm->reg_table[reg_count + 14] = (arm->curr_instruction | 1);
       arm->curr_instruction = arm->general_regs[15];
+
+#ifdef DEBUG_ON
+      write_instruction_log(arm, "BL11");
+#endif
       goto END;
     }
 
@@ -864,8 +872,8 @@ CMP3:
 MOV3:
   *reg_p = rm;
   if (reg_p == arm->reg_table[15]) {
-    arm->general_regs[15] = *reg_p * 0xFFFFFFFE;
-    arm->curr_instruction = arm->general_regs[15];
+    *reg_p &= 0xFFFFFFFE;
+    arm->curr_instruction = *reg_p;
   }
 
 #ifdef DEBUG_ON

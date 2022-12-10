@@ -49,7 +49,7 @@ void write_instruction_log(Arm *arm, char *name) {
   cJSON *r11 = cJSON_CreateNumber(arm->general_regs[11]);
   cJSON *r12 = cJSON_CreateNumber(arm->general_regs[12]);
   cJSON *r13 = cJSON_CreateNumber(arm->general_regs[13]);
-  cJSON *r14 = cJSON_CreateNumber(arm->general_regs[14]);
+  cJSON *r14 = cJSON_CreateNumber(arm->svc_regs[1]);
   cJSON *r15 = cJSON_CreateNumber(arm->general_regs[15]);
   cJSON *cpsr = cJSON_CreateNumber(arm->cpsr);
   cJSON *curr_instruction = cJSON_CreateNumber(arm->curr_instruction - ((arm->state == THUMB_STATE) ? 2 : 4));
