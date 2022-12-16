@@ -11,7 +11,7 @@ void power_on_gba(uint8_t *rom, unsigned int rom_size) {
   // printf("file open of size - %d\n", rom_size);
   Gba gba;
   gba.arm.curr_instruction = 0x03000000;
-  printf("%d\n", gba.arm.curr_instruction);
+  printf("curr_instruction: %d\n", gba.arm.curr_instruction);
   init_arm(&gba.arm);
 
   memcpy(&gba.memory.iwram, rom, rom_size);
@@ -20,15 +20,16 @@ void power_on_gba(uint8_t *rom, unsigned int rom_size) {
   int total = 0;
   gba.arm.mode = SVC;
   gba.arm.cpsr = 51;
-  gba.arm.state = THUMB_STATE;
+  gba.arm.state = ARM_STATE;
 
+  memory_init(&gba.memory);
   while (index < rom_size) {
     if (gba.arm.state == THUMB_STATE) {
       thumb_exec(&gba.arm);
       index += 2;
     } else {
-      arm_exec(&gba.arm);
       printf("called\n");
+      arm_exec(&gba.arm);
       index += 4;
     }
     ++total;

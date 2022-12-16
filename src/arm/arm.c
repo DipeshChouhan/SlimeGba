@@ -284,7 +284,7 @@ int arm_exec(Arm *arm) {
     cJSON_Delete(disassembler.json_obj);
     fclose(disassembler.json_log_file);
     free(json_data);
-    printf("exit code - %d\n", arm->general_regs[1]);
+    printf("exit code - %d\n", arm->general_regs[0]);
     exit(0);
   }
 #endif
