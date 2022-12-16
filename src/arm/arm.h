@@ -2,7 +2,8 @@
 #define SLIME_ARM_H
 #include <stdint.h>
 // CAUTION: Do not change the sequence in Mode enum
-typedef enum { USR = 0, // user
+typedef enum {
+  USR = 0, // user
   SYS,     // system
   IRQ,     // interrupt
   SVC,     // supervisor
@@ -53,6 +54,7 @@ typedef struct Arm {
 
 } Arm;
 
+#define SINGLE_BOOT_VECTOR 0x8000000
 #define RESET_LOW_VECTOR 0x00000000
 #define UNDEFINED_LOW_VECTOR 0x00000004
 #define SWI_LOW_VECTOR 0x00000008
@@ -85,8 +87,10 @@ typedef struct Arm {
 #define IS_BIT_NOT_SET(_op, _bit) ((_op & (1 << _bit)) != (1 << _bit))
 #define ROTATE_RIGHT32(_op, _ror) ((_op >> _ror) | (_op << (32 - _ror)))
 
-#define ASR_SIGN_32(_op, _shift, _sign) ((_op >> _shift) | (_sign * (0xFFFFFFFFu << (32 - _shift))))
-#define ASR_32(_op, _shift) ((_op >> _shift) | (IS_BIT_SET(_op, 31) * (0xFFFFFFFFu <<  (32 - _shift))))
+#define ASR_SIGN_32(_op, _shift, _sign)                                        \
+  ((_op >> _shift) | (_sign * (0xFFFFFFFFu << (32 - _shift))))
+#define ASR_32(_op, _shift)                                                    \
+  ((_op >> _shift) | (IS_BIT_SET(_op, 31) * (0xFFFFFFFFu << (32 - _shift))))
 
 #define GET_BIT(_op, _bit) ((_op >> _bit) & 1)
 
@@ -99,7 +103,8 @@ typedef struct Arm {
   ((Gba *)arm)->memory.address_bus = _address;                                 \
   _dest = _type(&((Gba *)arm)->memory);
 
-#define SIGN_EXTEND(_value, _bit) (_value | (IS_BIT_SET(_value, _bit) * (0xFFFFFFFF << (_bit + 1))));
+#define SIGN_EXTEND(_value, _bit)                                              \
+  (_value | (IS_BIT_SET(_value, _bit) * (0xFFFFFFFF << (_bit + 1))));
 
 #define SET_BIT(_op, _bit, _to) ((_op & (~(1 << _bit))) | (_to << _bit))
 
@@ -112,7 +117,7 @@ typedef struct Arm {
 
 #define SWI_INSTRUCTION(_arm)                                                  \
   _arm->svc_regs[R14_SVC] = _arm->curr_instruction;                            \
-  _arm->spsr[SVC - 2] = _arm->cpsr;                                                 \
+  _arm->spsr[SVC - 2] = _arm->cpsr;                                            \
   SET_P_MODE(_arm->cpsr, SVC_MODE);                                            \
   _arm->mode = SVC;                                                            \
   SET_P_STATE(_arm->cpsr, ARM_STATE);                                          \
@@ -125,19 +130,17 @@ typedef struct Arm {
     arm->exception_gen = 0;                                                    \
     if (arm->reset_pin) {                                                      \
       arm->reset_pin = 0;                                                      \
-      arm->fiq_pin = 0;                                                        \
-      arm->irq_pin = 0;                                                        \
       SET_P_MODE(arm->cpsr, SVC_MODE);                                         \
       arm->mode = SVC;                                                         \
       SET_P_STATE(arm->cpsr, ARM_STATE);                                       \
       arm->state = ARM_STATE;                                                  \
       DISABLE_IRQ(arm->cpsr);                                                  \
       DISABLE_FIQ(arm->cpsr);                                                  \
-      arm->curr_instruction = RESET_LOW_VECTOR;                                \
-    } else if (arm->fiq_pin && IS_BIT_SET(arm->cpsr, 6)) {                     \
+      arm->curr_instruction = SINGLE_BOOT_VECTOR;                              \
+    } else if (arm->fiq_pin && IS_BIT_NOT_SET(arm->cpsr, 6)) {                 \
       arm->fiq_pin = 0;                                                        \
       arm->fiq_regs[R14_FIQ] = arm->curr_instruction + 4;                      \
-      arm->spsr[FIQ - 2] = arm->cpsr;                                               \
+      arm->spsr[FIQ - 2] = arm->cpsr;                                          \
       SET_P_MODE(arm->cpsr, FIQ_MODE);                                         \
       arm->mode = FIQ;                                                         \
       SET_P_STATE(arm->cpsr, ARM_STATE);                                       \
@@ -145,10 +148,10 @@ typedef struct Arm {
       DISABLE_FIQ(arm->cpsr);                                                  \
       DISABLE_IRQ(arm->cpsr);                                                  \
       arm->curr_instruction = FIQ_LOW_VECTOR;                                  \
-    } else if (arm->irq_pin && IS_BIT_SET(arm->cpsr, 7)) {                     \
+    } else if (arm->irq_pin && IS_BIT_NOT_SET(arm->cpsr, 7)) {                 \
       arm->irq_pin = 0;                                                        \
       arm->irq_regs[R14_IRQ] = arm->curr_instruction + 4;                      \
-      arm->spsr[IRQ - 2] = arm->cpsr;                                               \
+      arm->spsr[IRQ - 2] = arm->cpsr;                                          \
       SET_P_MODE(arm->cpsr, IRQ_MODE);                                         \
       arm->mode = IRQ;                                                         \
       SET_P_STATE(arm->cpsr, ARM_STATE);                                       \

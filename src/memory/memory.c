@@ -85,7 +85,7 @@ void mem_write32(Memory *mem) {
   if (mem->address_bus < 0x4000) {
     // bios rom
   }
-  int memoryIndex = mem->address_bus >> 24;
+  int memoryIndex = (mem->address_bus >> 24) - 2;
   if (memoryIndex < 13) {
     mem->address_bus = mem->address_bus % mem->mem_mirrors[memoryIndex];
     MEM_WRITE32(mem->mem_table[memoryIndex]);
@@ -98,7 +98,7 @@ void mem_write16(Memory *mem) {
   if (mem->address_bus < 0x4000) {
     // bios rom
   }
-  int memoryIndex = mem->address_bus >> 24;
+  int memoryIndex = (mem->address_bus >> 24) - 2;
   if (memoryIndex < 13) {
     mem->address_bus = mem->address_bus % mem->mem_mirrors[memoryIndex];
     MEM_WRITE16(mem->mem_table[memoryIndex]);
@@ -125,9 +125,7 @@ uint32_t mem_read32(Memory *mem) {
   }
   int memoryIndex = (mem->address_bus >> 24) - 2;
   if (memoryIndex < 13) {
-    printf("memoryIndex: %d\n", memoryIndex);
     mem->address_bus = mem->address_bus % mem->mem_mirrors[memoryIndex];
-    printf("mem->address_bus: %X\n", mem->address_bus);
     MEM_READ32(mem->mem_table[memoryIndex]);
   }
   return mem->data_bus;
@@ -138,7 +136,7 @@ uint32_t mem_read16(Memory *mem) {
   if (mem->address_bus < 0x4000) {
     // bios rom
   }
-  int memoryIndex = mem->address_bus >> 24;
+  int memoryIndex = (mem->address_bus >> 24) - 2;
   if (memoryIndex < 13) {
     mem->address_bus = mem->address_bus % mem->mem_mirrors[memoryIndex];
     MEM_READ16(mem->mem_table[memoryIndex]);
@@ -152,7 +150,7 @@ uint32_t mem_read8(Memory *mem) {
   if (mem->address_bus < 0x4000) {
     // bios rom
   }
-  int memoryIndex = mem->address_bus >> 24;
+  int memoryIndex = (mem->address_bus >> 24) - 2;
   if (memoryIndex < 13) {
     mem->address_bus = mem->address_bus % mem->mem_mirrors[memoryIndex];
     MEM_READ8(mem->mem_table[memoryIndex]);

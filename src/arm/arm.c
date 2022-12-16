@@ -133,9 +133,9 @@
 // not considering _ror is zero
 
 // TODO Implement this function
-uint32_t arm_read(uint32_t addr) { return 0; }
-
-void arm_write(uint32_t addr, uint32_t value);
+// uint32_t arm_read(uint32_t addr) { return 0; }
+//
+// void arm_write(uint32_t addr, uint32_t value);
 
 #define ARM_WRITE(_address, _data, _type)                                      \
   ((Gba *)arm)->memory.address_bus = _address;                                 \
@@ -211,10 +211,10 @@ void init_arm(Arm *arm) {
   }
 
   arm->cpsr = 0;
-  arm->exception_gen = 0;
-  arm->reset_pin = 0;
+  arm->exception_gen = 1;
+  arm->reset_pin = 1;
   arm->irq_pin = 0;
-  arm->state = 0; // default arm state
+  arm->fiq_pin = 0;
 
   index = 0;
   while (index < 5) {
@@ -321,43 +321,6 @@ int arm_exec(Arm *arm) {
       &&CHECK_HI, &&CHECK_LS, &&CHECK_GE,    &&CHECK_LT,
       &&CHECK_GT, &&CHECK_LE, &&CHECK_AL,    &&UNCONDITIONAL};
 
-  // if (arm->exception_gen) {
-  //   arm->exception_gen = 0;
-  //   if (arm->reset_pin) {
-  //     arm->reset_pin = 0;
-  //     arm->fiq_pin = 0;
-  //     arm->irq_pin = 0;
-  //     SET_P_MODE(arm->cpsr, SVC_MODE);
-  //     arm->mode = SVC;
-  //     SET_P_STATE(arm->cpsr, ARM_STATE);
-  //     arm->state = ARM_STATE;
-  //     DISABLE_IRQ(arm->cpsr);
-  //     DISABLE_FIQ(arm->cpsr);
-  //     arm->curr_instruction = RESET_LOW_VECTOR;
-  //
-  //   } else if (arm->fiq_pin && IS_BIT_SET(arm->cpsr, 6)) {
-  //     arm->fiq_pin = 0;
-  //     arm->fiq_regs[R14_FIQ] = arm->curr_instruction + 4;
-  //     arm->spsr_fiq = arm->cpsr;
-  //     SET_P_MODE(arm->cpsr, FIQ_MODE);
-  //     arm->mode = FIQ;
-  //     SET_P_STATE(arm->cpsr, ARM_STATE);
-  //     arm->state = ARM_STATE;
-  //     DISABLE_FIQ(arm->cpsr);
-  //     DISABLE_IRQ(arm->cpsr);
-  //     arm->curr_instruction = FIQ_LOW_VECTOR;
-  //   } else if (arm->irq_pin && IS_BIT_SET(arm->cpsr, 7)) {
-  //     arm->irq_pin = 0;
-  //     arm->irq_regs[R14_IRQ] = arm->curr_instruction + 4;
-  //     arm->spsr_irq = arm->cpsr;
-  //     SET_P_MODE(arm->cpsr, IRQ_MODE);
-  //     arm->mode = IRQ;
-  //     SET_P_STATE(arm->cpsr, ARM_STATE);
-  //     arm->state = ARM_STATE;
-  //     DISABLE_IRQ(arm->cpsr);
-  //     arm->curr_instruction = IRQ_LOW_VECTOR;
-  //   }
-  // }
   INTERRUPT_REQUEST();
 
 FETCH:
