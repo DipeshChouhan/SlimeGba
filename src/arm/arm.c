@@ -468,13 +468,13 @@ DECODE:
 
     temp = OP_CODE & SWP_MASK;
     if (temp == SWP_DECODE) {
-      write_decoder_log(arm, "Swp");
+      // write_decoder_log(arm, "Swp");
       goto SWP_INST;
     } else if (temp == SWPB_DECODE) {
-      write_decoder_log(arm, "Swpb");
+      // write_decoder_log(arm, "Swpb");
       goto SWPB_INST;
     }
-    write_decoder_log(arm, "LoadStore_H_D_S Instruction");
+    // write_decoder_log(arm, "LoadStore_H_D_S Instruction");
     goto LOAD_STORE_H_D_S;
   } else if ((OP_CODE & DATA_PROCESS_MASK) == DATA_PROCESS_DECODE) {
     // instructions can data processing, control or undefined
@@ -496,7 +496,7 @@ DECODE:
     goto LOAD_STORE_W_U;
   } else if ((OP_CODE & LOAD_STORE_M_MASK) == LOAD_STORE_M_DECODE) {
     // Load and Store Multiple instructions
-    write_decoder_log(arm, "LoadStore_M Instruction");
+    // write_decoder_log(arm, "LoadStore_M Instruction");
     goto LOAD_STORE_M;
   } else if ((OP_CODE & BRANCH_LINK_MASK) == BRANCH_LINK_DECODE) {
     // Branch and branch link instructions
@@ -513,7 +513,7 @@ DECODE:
     goto COPROCESSOR;
   } else {
     // undefined, unimplemented
-    write_decoder_log(arm, "undefined");
+    // write_decoder_log(arm, "undefined");
     goto UNDEFINED;
   }
 
@@ -817,11 +817,6 @@ DATA_PROCESS:
   temp = OP_CODE & SHIFTER_REG_MASK;
   rm = *arm->reg_table[reg_count + RM_C];
   if (temp == SHIFTER_REG_DECODE) {
-    if (OP_CODE == 0xE15FF000) {
-
-      printf("rm - %X\n", rm);
-      printf("rn - %X\n", rn);
-    }
     shifter_operand = rm; // TODO - change to register
     shifter_carry_out = IS_BIT_SET(arm->cpsr, CF_BIT);
     goto *dp_inst_table[INST_OPCODE];
@@ -978,7 +973,6 @@ CONTROL:
     goto END;
 
   } else if ((OP_CODE & MRS_MASK) == MRS_DECODE) {
-    printf("OP_CODE %X\n", OP_CODE);
     reg_p = arm->reg_table[reg_count + RD_C];
     if (IS_BIT_SET(OP_CODE, 22)) {
       if (arm->mode > 1) {
@@ -991,7 +985,6 @@ CONTROL:
     } else {
       *reg_p = arm->cpsr;
     }
-    printf("mrs mode - %d\n", arm->mode);
     write_instruction_log(arm, "MRS");
     goto END;
 
@@ -1018,7 +1011,6 @@ CONTROL:
 #define fieldmask_bit2 18
 #define fieldmask_bit3 19
 
-  printf("MSR-OPCODE - %X\n", OP_CODE);
   if ((operand & unalloc_mask) == 0) {
     byte_mask = IS_BIT_SET(OP_CODE, fieldmask_bit0) * 0x000000FF;
     byte_mask |= IS_BIT_SET(OP_CODE, fieldmask_bit1) * 0x0000FF00;
@@ -1073,7 +1065,6 @@ CONTROL:
 #undef fieldmask_bit3
   goto END;
 BRANCH_LINK:
-  printf("branch\n");
 
   // TODO make sure sign extend is correct
   shifter_operand = OP_CODE & 0xFFFFFF;
@@ -1091,7 +1082,6 @@ BRANCH_LINK:
 COPROCESSOR:
   goto END;
 UNDEFINED:
-  printf("UNDEFINED - %X\n", OP_CODE);
   goto END;
 
 UNCONDITIONAL:
@@ -1100,7 +1090,6 @@ UNCONDITIONAL:
   // unpredictable
 
 AND_INST:
-  printf("AND\n");
   *reg_p = rn & shifter_operand;
   DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZC(); }
 #ifdef DEBUG_ON
@@ -1116,7 +1105,6 @@ EOR_INST:
   goto END;
 SUB_INST:
 
-  printf("SUB\n");
   shifter_operand = (~shifter_operand); // two's compliment
   result = rn + ((uint64_t)shifter_operand + 1);
   *reg_p = result;
@@ -1147,7 +1135,6 @@ RSB_INST:
   goto END;
 
 ADD_INST:
-  printf("ADD\n");
   result = rn + (uint64_t)shifter_operand;
   *reg_p = result;
 
@@ -1159,7 +1146,6 @@ ADD_INST:
   goto END;
 ADC_INST:
 
-  printf("ADC\n");
   result = rn + (uint64_t)shifter_operand + IS_BIT_SET(arm->cpsr, CF_BIT);
   *reg_p = result;
   DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZCV(); }
@@ -1169,7 +1155,6 @@ ADC_INST:
   goto END;
 
 SBC_INST:
-  printf("SBC\n");
   shifter_operand = (~shifter_operand);
   result = rn + ((uint64_t)shifter_operand+1) - IS_BIT_NOT_SET(arm->cpsr, CF_BIT);
   *reg_p = result;
@@ -1198,7 +1183,6 @@ TST_INST:
 #endif
   goto END;
 TEQ_INST:
-  printf("TEQ\n");
   result = rn ^ shifter_operand;
   COMPARE_INSTS_NZC();
 
@@ -1207,7 +1191,6 @@ TEQ_INST:
 #endif
   goto END;
 CMP_INST:
-  printf("CMP - %X\n", OP_CODE);
   shifter_operand = (~shifter_operand);
   result = rn + ((uint64_t)shifter_operand + 1);
   shifter_operand += 1;
@@ -1217,7 +1200,6 @@ CMP_INST:
 #endif
   goto END;
 CMN_INST:
-  printf("CMN\n");
   result = rn + (uint64_t)shifter_operand;
   COMPARE_INSTS_NZCV();
 #ifdef DEBUG_ON
@@ -1234,7 +1216,6 @@ ORR_INST:
 
   goto END;
 MOV_INST:
-  printf("MOV\n");
   *reg_p = shifter_operand;
   DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZC(); }
 #ifdef DEBUG_ON
@@ -1251,9 +1232,7 @@ BIC_INST:
 #endif
   goto END;
 MVN_INST:
-  printf("MVN - %X\n", shifter_operand);
   *reg_p = ~shifter_operand;
-  printf("reg_p - %X\n", *reg_p);
   DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZC(); }
 #ifdef DEBUG_ON
   write_instruction_log(arm, "MVN");
@@ -1292,7 +1271,7 @@ LOAD_STORE_H_D_S_INSTS:
 
 LOAD_STORE_W_U_T_INSTS:
 
-  write_decoder_log(arm, "LOAD_STORE_W_U_T_INSTS");
+  // write_decoder_log(arm, "LOAD_STORE_W_U_T_INSTS");
   // Instructions can be LDRBT, LDRT, STRBT, STRT
   temp = OP_CODE & 0x1700000;
   reg_p = arm->reg_table[reg_count + RD_C];
@@ -1316,7 +1295,7 @@ LOAD_STORE_W_U_T_INSTS:
 
 LOAD_STORE_W_U_INSTS:
 
-  write_decoder_log(arm, "LoadStore_W_U Instruction");
+  // write_decoder_log(arm, "LoadStore_W_U Instruction");
   // Instructions can be LDR, LDRB, STR, STRB
   temp = OP_CODE & 0x500000;
   rd = RD_C;
@@ -1421,21 +1400,18 @@ LOAD_STORE_M_INSTS:
   goto END;
 
 MUL_INST:
-  printf("MUL\n");
   *reg_p = rm * rs;
   if (s_bit) {
     MUL_NZ(arm);
   }
   goto END;
 MLA_INST:
-  printf("MLA\n");
   *reg_p = (rm * rs) + *arm->reg_table[rn];
   if (s_bit) {
     MUL_NZ(arm);
   }
   goto END;
 UMULL_INST:
-  printf("UMULL\n");
   result = (uint64_t)rm * rs;
   *reg_p = result >> 32;        // rdhi
   *arm->reg_table[rn] = result; // rdlow
@@ -1445,7 +1421,6 @@ UMULL_INST:
   goto END;
 
 UMLAL_INST:
-  printf("UMLAL\n");
   // RdLo = (Rm * Rs)[31:0] + RdLo
   // /* Unsigned multiplication */
   // RdHi = (Rm * Rs)[63:32] + RdHi + CarryFrom((Rm * Rs)[31:0] + RdLo)
@@ -1457,13 +1432,10 @@ UMLAL_INST:
   // V Flag = unaffected
   // /* See "C and V flags" note */
   result = (uint64_t)rm * rs;
-  printf("%lX\n", result);
   *reg_p += (result >> 32);
-  printf("rdlow - %d\n", *arm->reg_table[rn]);
   result = (result & 0xFFFFFFFF) + *arm->reg_table[rn];
   *reg_p += GET_BIT(result, 32);
   *arm->reg_table[rn] = result;
-  printf("rdhigh - %d\n", *reg_p);
   if (s_bit) {
     USMULL_NZ(arm);
   }
@@ -1472,7 +1444,6 @@ SMULL_INST:
   // TODO: make sure it is correct
   result = (int32_t)rm * (int32_t)rs;
   *reg_p = (result >> 32);
-  printf("SMULL - %lX\n", result);
   *arm->reg_table[rn] = result;
   if (s_bit) {
     USMULL_NZ(arm);

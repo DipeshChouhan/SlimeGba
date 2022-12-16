@@ -74,7 +74,6 @@ int thumb_exec(Arm *arm) {
   INTERRUPT_REQUEST();
 
   THUMB_FETCH(arm->curr_instruction, arm->data_bus);
-  printf("OP_CODE - %X\n", OP_CODE);
 
 DECODE:
 
@@ -92,7 +91,6 @@ DECODE:
     //
   #ifdef DEBUG_ON
     write_instruction_log(arm, "B");
-    printf("b opcode - %X\n", OP_CODE);
 #endif
     goto *cond_field_table[(OP_CODE >> 8) & 0xF];
 
@@ -227,7 +225,6 @@ DECODE:
     arm->state = rm & 1;
     arm->general_regs[15] = rm & 0xFFFFFFFE;
     arm->curr_instruction = arm->general_regs[15];
-    printf("rm - %d\n", arm->curr_instruction);
     write_instruction_log(arm, "BX");
     goto END;
 

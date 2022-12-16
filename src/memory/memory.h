@@ -13,10 +13,16 @@ typedef struct Memory {
   uint8_t iwram[32 * 1024]; // internal work ram
   uint8_t wram[256 * 1024]; // on board work ram
   uint8_t io_ram[1024];         // io registers
+  uint8_t *game_pak_rom;
+  uint8_t *sram;
   uint8_t palette_ram[1024];
   uint8_t vram[96 * 1024];
   uint8_t oam[1024];
+  uint8_t *mem_table[13];
+  uint32_t mem_mirrors[13];
 } Memory;
+
+void memory_init(Memory *mem);
 
 uint32_t mem_read32 (Memory *mem);
 uint32_t mem_read16 (Memory *mem);

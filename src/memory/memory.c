@@ -49,6 +49,38 @@ Unused Memory Area
 
 #define MEM_READ8(_ram) mem->data_bus = _ram[mem->address_bus];
 
+void memory_init(Memory *mem) {
+  mem->mem_table[0] = mem->wram;
+  mem->mem_table[1] = mem->iwram;
+  mem->mem_table[2] = mem->io_ram;
+  mem->mem_table[3] = mem->palette_ram;
+  mem->mem_table[4] = mem->vram;
+  mem->mem_table[5] = mem->oam;
+  // game pak mem_table and sram table are filled by rom loader
+  mem->mem_table[6] = mem->game_pak_rom;
+  mem->mem_table[7] = mem->game_pak_rom;
+  mem->mem_table[8] = mem->game_pak_rom;
+  mem->mem_table[9] = mem->game_pak_rom;
+  mem->mem_table[10] = mem->game_pak_rom;
+  mem->mem_table[11] = mem->game_pak_rom;
+  mem->mem_table[12] = mem->sram;
+
+  mem->mem_mirrors[0] = 0x40000;
+  mem->mem_mirrors[1] = 0x8000;
+  mem->mem_mirrors[2] = 0x400;
+  mem->mem_mirrors[3] = 0x400;
+  mem->mem_mirrors[4] = 0x18000;
+  mem->mem_mirrors[5] = 0x400;
+  // game pak mirrors and sram are filled by rom loader
+  mem->mem_mirrors[6] = 0x2000000;
+  mem->mem_mirrors[7] = 0x2000000;
+  mem->mem_mirrors[8] = 0x2000000;
+  mem->mem_mirrors[9] = 0x2000000;
+  mem->mem_mirrors[10] = 0x2000000;
+  mem->mem_mirrors[11] = 0x2000000;
+  mem->mem_mirrors[12] = 0x010000;
+}
+
 void mem_write32(Memory *mem) {
   // if (mem->address_bus < 0x4000) {
   //   // bios rom
