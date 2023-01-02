@@ -1321,8 +1321,10 @@ LOAD_STORE_M_INSTS:
   reg_count = arm->mode * 16;
 
   if ((OP_CODE & LDM1_MASK) == LDM1_DECODE) {
+    cpu_cycle = 0;
     for (i = 0; i < 15; i++) {
       if (reg_list & 1) {
+        cpu_cycle += 1;
         // *arm->reg_table[reg_count + i] = arm_read(start_address);
         ARM_READ(start_address, *arm->reg_table[reg_count + i], mem_read32);
         start_address += 4;
@@ -1330,9 +1332,14 @@ LOAD_STORE_M_INSTS:
       reg_list >>= 1;
     }
 
+    cpu_cycle += 2;
+
     if (reg_list & 1) {
+      cpu_cycle += 1;
       // check for pc
       // arm->general_regs[R_15] = arm_read(start_address) & 0xFFFFFFFC;
+
+      cpu_cycle += 2;
 
       ARM_READ(start_address, arm->general_regs[R_15], mem_read32);
       arm->curr_instruction = arm->general_regs[R_15];
@@ -1341,19 +1348,24 @@ LOAD_STORE_M_INSTS:
     assert(end_address == start_address - 4);
 
   } else if ((OP_CODE & LDM2_MASK) == LDM2_DECODE) {
+    cpu_cycle = 0;
     for (i = 0; i < 15; i++) {
       if (reg_list & 1) {
+        cpu_cycle += 1;
         // arm->general_regs[i] = arm_read(start_address);
         ARM_READ(start_address, arm->general_regs[i], mem_read32);
         start_address += 4;
       }
       reg_list >>= 1;
     }
+    cpu_cycle += 2;
     assert(end_address == start_address - 4);
 
   } else if ((OP_CODE & LDM3_MASK) == LDM3_DECODE) {
+    cpu_cycle  = 1 ;
     for (i = 0; i < 15; i++) {
       if (reg_list & 1) {
+        cpu_cycle += 1;
         // *arm->reg_table[reg_count + i] = arm_read(start_address);
         ARM_READ(start_address, *arm->reg_table[reg_count + i], mem_read32);
         start_address += 4;
@@ -1368,23 +1380,30 @@ LOAD_STORE_M_INSTS:
     arm->curr_instruction = arm->general_regs[R_15];
     start_address += 4;
     assert(end_address == start_address - 4);
+    cpu_cycle += 4;
   } else if ((OP_CODE & STM1_MASK) == STM1_DECODE) {
+    cpu_cycle = 0;
     for (i = 0; i < 16; i++) {
       if (reg_list & 1) {
+        cpu_cycle += 1;
         ARM_WRITE(start_address, *arm->reg_table[reg_count + i], mem_write32);
         start_address += 4;
       }
       reg_list >>= 1;
     }
+    cpu_cycle += 1;
     assert(end_address == start_address - 4);
   } else if ((OP_CODE & STM2_MASK) == STM2_DECODE) {
+    cpu_cycle= 0;
     for (i = 0; i < 16; i++) {
       if (reg_list & 1) {
+        cpu_cycle += 1;
         ARM_WRITE(start_address, arm->general_regs[i], mem_write32);
         start_address += 4;
       }
       reg_list >>= 1;
     }
+    cpu_cycle += 1;
     assert(end_address == start_address - 4);
   }
   goto END;
