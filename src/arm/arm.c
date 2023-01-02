@@ -941,6 +941,7 @@ CONTROL:
     arm->state = rm & 1;
     arm->general_regs[R_15] = rm & 0xFFFFFFFE;
     arm->curr_instruction = arm->general_regs[R_15];
+    cpu_cycle = 3;
     goto END;
 
   } else if ((OP_CODE & MRS_MASK) == MRS_DECODE) {
@@ -951,8 +952,7 @@ CONTROL:
       } else {
         // TODO unpredictable
         *reg_p = arm->cpsr;
-        
-      } 
+      }
     } else {
       *reg_p = arm->cpsr;
     }
@@ -1049,6 +1049,7 @@ BRANCH_LINK:
   arm->general_regs[R_15] += shifter_operand;
   arm->curr_instruction = arm->general_regs[R_15];
   write_instruction_log(arm, "B,BL");
+  cpu_cycle = 3;
   goto END;
 COPROCESSOR:
   goto END;
@@ -1127,7 +1128,8 @@ ADC_INST:
 
 SBC_INST:
   shifter_operand = (~shifter_operand);
-  result = rn + ((uint64_t)shifter_operand+1) - IS_BIT_NOT_SET(arm->cpsr, CF_BIT);
+  result =
+      rn + ((uint64_t)shifter_operand + 1) - IS_BIT_NOT_SET(arm->cpsr, CF_BIT);
   *reg_p = result;
   shifter_operand += 1;
   DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZCV(); }
@@ -1137,7 +1139,8 @@ SBC_INST:
   goto END;
 RSC_INST:
   rn = (~rn);
-  result = shifter_operand + ((uint64_t)rn + 1) - IS_BIT_NOT_SET(arm->cpsr, CF_BIT);
+  result =
+      shifter_operand + ((uint64_t)rn + 1) - IS_BIT_NOT_SET(arm->cpsr, CF_BIT);
   *reg_p = result;
   rn += 1;
   DATA_PROCESS_RD_EQ_R15(arm) if (s_bit) { DATA_PROCESS_NZCV(); }
@@ -1214,11 +1217,13 @@ MVN_INST:
 LOAD_STORE_H_D_S_INSTS:
 
   temp = OP_CODE & LS_H_D_S_INST_MASK;
-  reg_count = (arm->mode * 16) + RD_C;
+  rd = RD_C;
+  reg_count += rd;
   if (temp == LDRH_DECODE) {
 
     // *arm->reg_table[reg_count] = arm_read(ls_address) & 0xFFFF;
     ARM_READ(ls_address, *arm->reg_table[reg_count], mem_read16);
+    cpu_cycle = (rd == R_15) ? 5 : 3;
 
   } else if (temp == LDRSB_DECODE) {
     // shifter_operand = arm_read(ls_address) & 0xFF;
@@ -1226,6 +1231,7 @@ LOAD_STORE_H_D_S_INSTS:
     shifter_operand = SIGN_EXTEND(shifter_operand, 7);
 
     *arm->reg_table[reg_count] = shifter_operand;
+    cpu_cycle = (rd == R_15) ? 5 : 3;
 
   } else if (temp == LDRSH_DECODE) {
     // shifter_operand = arm_read(ls_address) & 0xFFFF;
@@ -1233,10 +1239,12 @@ LOAD_STORE_H_D_S_INSTS:
     shifter_operand = SIGN_EXTEND(shifter_operand, 15);
 
     *arm->reg_table[reg_count] = shifter_operand;
+    cpu_cycle = (rd == R_15) ? 5 : 3;
 
   } else if (temp == STRH_DECODE) {
     // TODO implement it
     ARM_WRITE(ls_address, *arm->reg_table[reg_count], mem_write16);
+    cpu_cycle = 2;
   }
   goto END;
 
@@ -1245,22 +1253,27 @@ LOAD_STORE_W_U_T_INSTS:
   // write_decoder_log(arm, "LOAD_STORE_W_U_T_INSTS");
   // Instructions can be LDRBT, LDRT, STRBT, STRT
   temp = OP_CODE & 0x1700000;
-  reg_p = arm->reg_table[reg_count + RD_C];
+  rd = RD_C;
+  reg_p = arm->reg_table[reg_count + rd];
   if (temp == LDRBT_DECODE) {
     // *reg_p = arm_read(ls_address);
     ARM_READ(ls_address, *reg_p, mem_read8);
     *arm->reg_table[reg_count + RN_C] = ls_address;
+    cpu_cycle = (rd == R_15) ? 5 : 3;
 
   } else if (temp == STRBT_DECODE) {
     ARM_WRITE(ls_address, *reg_p, mem_write8);
+    cpu_cycle = (rd == R_15) ? 5 : 3;
 
   } else if (temp == LDRT_DECODE) {
 
     // *reg_p = arm_read(ls_address);
     ARM_READ(ls_address, *reg_p, mem_read32);
+    cpu_cycle = (rd == R_15) ? 5 : 3;
 
   } else if (temp == STRT_DECODE) {
     ARM_WRITE(ls_address, *reg_p, mem_write32);
+    cpu_cycle = 2;
   }
   goto END;
 
@@ -1280,17 +1293,23 @@ LOAD_STORE_W_U_INSTS:
     } else {
       *reg_p = result;
     }
+    cpu_cycle = (rd == R_15) ? 5 : 3;
 
   } else if (temp == STR_DECODE) {
     ARM_WRITE(ls_address, *reg_p, mem_write32); // word write
+    cpu_cycle = 2;
 
   } else if (temp == LDRB_DECODE) {
     // *reg_p = arm_read(ls_address); // unsigned byte memory access
     ARM_READ(ls_address, *reg_p, mem_read8);
+    cpu_cycle = (rd == R_15) ? 5 : 3;
 
   } else if (temp == STRB_DECODE) {
     ARM_WRITE(ls_address, *reg_p, mem_write8); // byte write
+    cpu_cycle = 2;
   }
+
+  cpu_cycle = (rd == R_15) ? 5 : 3;
   goto END;
 
 LOAD_STORE_M_INSTS:
