@@ -301,6 +301,7 @@ int arm_exec(Arm *arm) {
   int reg_count = 0;
   int s_bit = 0;
   uint32_t shift = 0;
+  uint32_t cpu_cycle = 0;
 
   uint32_t shift_imm = 0;
   uint32_t rotate_imm = 0;
@@ -753,6 +754,8 @@ LOAD_STORE_M:
 #undef end_address
 DATA_PROCESS:
 
+  cpu_cycle = 1;
+
   // shifter operand processing
 
 #define INST_OPCODE ((OP_CODE >> 21) & 0xF)
@@ -760,6 +763,9 @@ DATA_PROCESS:
 
   rn = *arm->reg_table[reg_count + RN_C];
   rd = RD_C;
+  if (rd == R_15) {
+    cpu_cycle += 2;
+  }
   reg_p = arm->reg_table[reg_count + rd];
   s_bit = S_BIT;
 
@@ -840,6 +846,7 @@ DATA_PROCESS:
   }
 
   temp = OP_CODE & SHIFTER_SHIFT_REG_MASK;
+  cpu_cycle += 1;
 
   if (RM_C == R_15) {
     rm += 4;
@@ -916,6 +923,7 @@ DATA_PROCESS:
     goto *dp_inst_table[INST_OPCODE];
   }
 
+  cpu_cycle = 1;
   goto END;
 SWI:
   // TODO check implementation {!Its Wrong}
@@ -1441,5 +1449,5 @@ SWPB_INST:
   *arm->reg_table[reg_count + RD_C] = shifter_operand;
 
 END:
-  return 0;
+  return cpu_cycle;
 }
