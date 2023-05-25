@@ -164,5 +164,4 @@ void init_arm(Arm *arm);
 // execute a single arm mode instruction and returns cycle count
 int arm_exec(Arm *arm);
 int thumb_exec(Arm *arm);
-extern int processor_modes[16];
 #endif /* ! */

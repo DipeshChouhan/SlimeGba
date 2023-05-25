@@ -5,8 +5,6 @@
 #include <string.h>
 #include "../arm/disassembler.h"
 
-int processor_modes[16] = {USR, FIQ, IRQ, SVC, 7, 7, 7, ABT,
-                           7,   7,   7,   UND, 7, 7, 7, SYS};
 
 void load_gba_rom(Gba *gba) {
 

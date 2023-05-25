@@ -45,10 +45,6 @@
   _address += 2;
 
 int thumb_exec(Arm *arm) {
-  // if (arm->mode == UND) {
-  //   printf("exit_code - %d\n", arm->general_regs[1]);
-  //   exit(0);
-  // }
 
   uint32_t temp = 0;
   uint64_t result = 0;

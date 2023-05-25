@@ -59,6 +59,10 @@
 #define ROTATE_IMM ((OP_CODE >> 8) & 0xF)
 #define IMM_8 (OP_CODE & 0xFF)
 
+
+int processor_modes[16] = {USR, FIQ, IRQ, SVC, 7, 7, 7, ABT,
+                           7,   7,   7,   UND, 7, 7, 7, SYS};
+
 // #define DATA_PROCESS_NZCV(_arm)                                                \
 //   temp = _arm->cpsr & 0xFFFFFFF;                                               \
 //   temp |= (result & 0x80000000);                                               \
