@@ -18,7 +18,6 @@ typedef struct Arm {
   Mode mode; // operation mode
 
   uint32_t curr_instruction; // address
-  int shifter_carry_out;     // internal
   uint32_t data_bus;         // 32 bit data bus
   uint32_t address_bus;
 
@@ -32,7 +31,7 @@ typedef struct Arm {
   uint32_t irq_regs[2]; // banked registers from r13 - r14
   uint32_t und_regs[2]; // banked registers from r13 - r14
 
-  uint32_t *reg_table[112];
+  uint32_t *reg_table[112]; // registers table for fast accessing registers in different modes
   // ARM-state program status registers
   uint32_t cpsr;
   // don't change order below

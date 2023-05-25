@@ -22,8 +22,7 @@ External Memory (Game Pak)
   0C000000-0DFFFFFF   Game Pak ROM/FlashROM (max 32MB) - Wait State 2
   0E000000-0E00FFFF   Game Pak SRAM    (max 64 KBytes) - 8bit Bus width
   0E010000-0FFFFFFF   Not used
-Unused Memory Area
-  10000000-FFFFFFFF   Not used (upper 4bits of mem->address_bus bus unused)
+Unused Memory Area 10000000-FFFFFFFF   Not used (upper 4bits of mem->address_bus bus unused)
   */
 
 #define MEM_WRITE32(_ram)                                                      \

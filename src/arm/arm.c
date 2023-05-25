@@ -107,23 +107,23 @@
   temp = _arm->cpsr & 0x3FFFFFFF;                                              \
   temp |= (*reg_p & 0x80000000);                                               \
   temp |= ((*reg_p == 0) << 30);                                               \
-  arm->cpsr = temp;
+  _arm->cpsr = temp;
 
 #define USMULL_NZ(_arm)                                                        \
   temp = _arm->cpsr & 0x3FFFFFFF;                                              \
   temp |= (*reg_p & 0x80000000);                                               \
   temp |= (((*reg_p == 0) && (*_arm->reg_table[rn] == 0)) << 30);              \
-  arm->cpsr = temp;
+  _arm->cpsr = temp;
 
 #define DATA_PROCESS_RD_EQ_R15(_arm)                                           \
   if (rd == R_15) {                                                            \
-    arm->curr_instruction = *reg_p;                                            \
+    _arm->curr_instruction = *reg_p;                                            \
     if (s_bit) {                                                               \
       if (arm->mode > 1) {                                                     \
-        arm->cpsr = arm->spsr[arm->mode - 2];                                  \
-        arm->mode = processor_modes[arm->cpsr & 0xF];                          \
+        _arm->cpsr = _arm->spsr[_arm->mode - 2];                                  \
+        _arm->mode = processor_modes[_arm->cpsr & 0xF];                          \
       }                                                                        \
-      write_instruction_log(arm, "SUB");                                       \
+      write_instruction_log(_arm, "SUB");                                       \
       goto END;                                                                \
     }                                                                          \
   }
@@ -151,6 +151,7 @@
   arm->general_regs[R_15] = _address + 8;                                      \
   _address += 4;
 
+// algorithm to generate table for all registers
 void gen_reg_table(Arm *arm) {
 
   for (int mode = 0; mode < 7; mode++) {
@@ -192,10 +193,12 @@ void gen_reg_table(Arm *arm) {
   }
 }
 
+
 void init_arm(Arm *arm) {
 
   int index = 0;
 
+  // initializing registers
   while (index < 16) {
     arm->general_regs[index] = 0;
     if (index < 7) {
@@ -359,8 +362,7 @@ CHECK_MI:
     goto DECODE;
   }
   goto END;
-CHECK_PL:
-  if (IS_BIT_SET(arm->cpsr, NF_BIT)) {
+CHECK_PL: if (IS_BIT_SET(arm->cpsr, NF_BIT)) {
     goto END;
   }
   goto DECODE;
@@ -410,6 +412,7 @@ CHECK_LE:
 CHECK_AL:
   // alway conditional
 
+// Instruction type decoding
 DECODE:
 
   if ((OP_CODE & MULTIPLY_MASK) == MULTIPLY_DECODE) {
@@ -424,7 +427,6 @@ DECODE:
     rn = reg_count + RD_C;
     s_bit = S_BIT;
 
-    // write_decoder_log(arm, "Multiply Instruction");
     goto *mul_inst_table[temp];
   } else if ((OP_CODE & LOAD_STORE_H_D_S_MASK) == LOAD_STORE_H_D_S_DECODE) {
     // Load and store halfword or doubleword, and load signed byte instructions,
@@ -432,23 +434,18 @@ DECODE:
 
     temp = OP_CODE & SWP_MASK;
     if (temp == SWP_DECODE) {
-      // write_decoder_log(arm, "Swp");
       goto SWP_INST;
     } else if (temp == SWPB_DECODE) {
-      // write_decoder_log(arm, "Swpb");
       goto SWPB_INST;
     }
-    // write_decoder_log(arm, "LoadStore_H_D_S Instruction");
     goto LOAD_STORE_H_D_S;
   } else if ((OP_CODE & DATA_PROCESS_MASK) == DATA_PROCESS_DECODE) {
     // instructions can data processing, control or undefined
     if ((OP_CODE & CONTROL_MASK) != CONTROL_DECODE) {
       // instructions are data processing
-      // write_decoder_log(arm, "Data Process Instruction");
       goto DATA_PROCESS;
     }
 
-    // write_decoder_log(arm, "Control Instruction");
     goto CONTROL;
 
     // control instruction
@@ -456,28 +453,22 @@ DECODE:
   } else if ((OP_CODE & LOAD_STORE_W_U_MASK) == LOAD_STORE_W_U_DECODE) {
     // Load and store word or unsigned byte instructions and media instructions
     // and architecturally undefined instructions
-    // printf("W_U %X\n", OP_CODE);
     goto LOAD_STORE_W_U;
   } else if ((OP_CODE & LOAD_STORE_M_MASK) == LOAD_STORE_M_DECODE) {
     // Load and Store Multiple instructions
-    // write_decoder_log(arm, "LoadStore_M Instruction");
     goto LOAD_STORE_M;
   } else if ((OP_CODE & BRANCH_LINK_MASK) == BRANCH_LINK_DECODE) {
     // Branch and branch link instructions
     reg_count = (arm->mode * 16) + 14; // R14 is link register
-    // write_decoder_log(arm, "Branch_Link Instruction");
     goto BRANCH_LINK;
   } else if ((OP_CODE & SWI_MASK) == SWI_DECODE) {
     // swi instruction
-    // write_decoder_log(arm, "Swi Instruction");
     goto SWI;
   } else if ((OP_CODE & COPROCESSOR_MASK) == COPROCESSOR_DECODE) {
     // coprocessor instructions
-    // write_decoder_log(arm, "coprocessor instruction");
     goto COPROCESSOR;
   } else {
     // undefined, unimplemented
-    // write_decoder_log(arm, "undefined");
     goto UNDEFINED;
   }
 
@@ -931,7 +922,6 @@ SWI:
   goto END;
 CONTROL:
 
-  // printf("OP_CODE: %X\n", OP_CODE);
 #define operand shifter_operand
   reg_count = arm->mode * 16;
   if ((OP_CODE & BX_MASK) == BX_DECODE) {
@@ -1013,7 +1003,6 @@ CONTROL:
     // set state, mode
     arm->state = IS_BIT_SET(arm->cpsr, 5);
     arm->mode = processor_modes[arm->cpsr & 0xF];
-    // printf("mode - %d\n", arm->mode);
     if (arm->mode > 6) {
       printf("Not a valid processor mode\n");
       exit(1);
@@ -1382,7 +1371,7 @@ LOAD_STORE_M_INSTS:
     assert(end_address == start_address - 4);
     cpu_cycle += 4;
   } else if ((OP_CODE & STM1_MASK) == STM1_DECODE) {
-    cpu_cycle = 0;
+    cpu_cycle = 1;
     for (i = 0; i < 16; i++) {
       if (reg_list & 1) {
         cpu_cycle += 1;
@@ -1391,10 +1380,9 @@ LOAD_STORE_M_INSTS:
       }
       reg_list >>= 1;
     }
-    cpu_cycle += 1;
     assert(end_address == start_address - 4);
   } else if ((OP_CODE & STM2_MASK) == STM2_DECODE) {
-    cpu_cycle= 0;
+    cpu_cycle= 1;
     for (i = 0; i < 16; i++) {
       if (reg_list & 1) {
         cpu_cycle += 1;
@@ -1403,7 +1391,6 @@ LOAD_STORE_M_INSTS:
       }
       reg_list >>= 1;
     }
-    cpu_cycle += 1;
     assert(end_address == start_address - 4);
   }
   goto END;
