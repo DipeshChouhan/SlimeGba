@@ -59,7 +59,6 @@
 #define ROTATE_IMM ((OP_CODE >> 8) & 0xF)
 #define IMM_8 (OP_CODE & 0xFF)
 
-
 int processor_modes[16] = {USR, FIQ, IRQ, SVC, 7, 7, 7, ABT,
                            7,   7,   7,   UND, 7, 7, 7, SYS};
 
@@ -121,13 +120,13 @@ int processor_modes[16] = {USR, FIQ, IRQ, SVC, 7, 7, 7, ABT,
 
 #define DATA_PROCESS_RD_EQ_R15(_arm)                                           \
   if (rd == R_15) {                                                            \
-    _arm->curr_instruction = *reg_p;                                            \
+    _arm->curr_instruction = *reg_p;                                           \
     if (s_bit) {                                                               \
       if (arm->mode > 1) {                                                     \
-        _arm->cpsr = _arm->spsr[_arm->mode - 2];                                  \
-        _arm->mode = processor_modes[_arm->cpsr & 0xF];                          \
+        _arm->cpsr = _arm->spsr[_arm->mode - 2];                               \
+        _arm->mode = processor_modes[_arm->cpsr & 0xF];                        \
       }                                                                        \
-      write_instruction_log(_arm, "SUB");                                       \
+      write_instruction_log(_arm, "SUB");                                      \
       goto END;                                                                \
     }                                                                          \
   }
@@ -196,7 +195,6 @@ void gen_reg_table(Arm *arm) {
     }
   }
 }
-
 
 void init_arm(Arm *arm) {
 
@@ -366,7 +364,8 @@ CHECK_MI:
     goto DECODE;
   }
   goto END;
-CHECK_PL: if (IS_BIT_SET(arm->cpsr, NF_BIT)) {
+CHECK_PL:
+  if (IS_BIT_SET(arm->cpsr, NF_BIT)) {
     goto END;
   }
   goto DECODE;
@@ -430,6 +429,37 @@ DECODE:
     rm = *arm->reg_table[reg_count + RM_C];
     rn = reg_count + RD_C;
     s_bit = S_BIT;
+
+    // couting m for cycles
+    // TODO - check for correctness
+
+    shifter_operand = rs >> 8;
+    shift = rm >> 8;
+
+    if ((shifter_operand == 0x0 || shifter_operand == 0xFFFFFF) &&
+        shifter_operand == shift) {
+      //[32:8]
+      cpu_cycle = 1 + 2;
+      goto *mul_inst_table[temp];
+    }
+    shifter_operand = rs >> 16;
+    shift = rm >> 16;
+    if ((shifter_operand == 0x0 || shifter_operand == 0xFFFF) &&
+        shifter_operand == shift) {
+      //[32:16]
+      cpu_cycle = 2 + 2;
+      goto *mul_inst_table[temp];
+    }
+    shifter_operand = rs >> 24;
+    shift = rm >> 24;
+    if ((shifter_operand == 0x0 || shifter_operand == 0xFF) &&
+        shifter_operand == shift) {
+      // [32:24]
+      cpu_cycle = 3 + 2;
+      goto *mul_inst_table[temp];
+    }
+
+    cpu_cycle = 4 + 2;
 
     goto *mul_inst_table[temp];
   } else if ((OP_CODE & LOAD_STORE_H_D_S_MASK) == LOAD_STORE_H_D_S_DECODE) {
@@ -923,6 +953,7 @@ DATA_PROCESS:
 SWI:
   // TODO check implementation {!Its Wrong}
   SWI_INSTRUCTION(arm);
+  cpu_cycle = 3;
   goto END;
 CONTROL:
 
@@ -1328,11 +1359,10 @@ LOAD_STORE_M_INSTS:
     cpu_cycle += 2;
 
     if (reg_list & 1) {
-      cpu_cycle += 1;
       // check for pc
       // arm->general_regs[R_15] = arm_read(start_address) & 0xFFFFFFFC;
 
-      cpu_cycle += 2;
+      cpu_cycle += 3;
 
       ARM_READ(start_address, arm->general_regs[R_15], mem_read32);
       arm->curr_instruction = arm->general_regs[R_15];
@@ -1355,7 +1385,7 @@ LOAD_STORE_M_INSTS:
     assert(end_address == start_address - 4);
 
   } else if ((OP_CODE & LDM3_MASK) == LDM3_DECODE) {
-    cpu_cycle  = 1 ;
+    cpu_cycle = 1;
     for (i = 0; i < 15; i++) {
       if (reg_list & 1) {
         cpu_cycle += 1;
@@ -1386,7 +1416,7 @@ LOAD_STORE_M_INSTS:
     }
     assert(end_address == start_address - 4);
   } else if ((OP_CODE & STM2_MASK) == STM2_DECODE) {
-    cpu_cycle= 1;
+    cpu_cycle = 1;
     for (i = 0; i < 16; i++) {
       if (reg_list & 1) {
         cpu_cycle += 1;
@@ -1404,12 +1434,14 @@ MUL_INST:
   if (s_bit) {
     MUL_NZ(arm);
   }
+  cpu_cycle += 1;
   goto END;
 MLA_INST:
   *reg_p = (rm * rs) + *arm->reg_table[rn];
   if (s_bit) {
     MUL_NZ(arm);
   }
+  cpu_cycle += 2;
   goto END;
 UMULL_INST:
   result = (uint64_t)rm * rs;
@@ -1418,6 +1450,7 @@ UMULL_INST:
   if (s_bit) {
     USMULL_NZ(arm);
   }
+  cpu_cycle += 2;
   goto END;
 
 UMLAL_INST:
@@ -1439,6 +1472,7 @@ UMLAL_INST:
   if (s_bit) {
     USMULL_NZ(arm);
   }
+  cpu_cycle += 3;
   goto END;
 SMULL_INST:
   // TODO: make sure it is correct
@@ -1448,6 +1482,7 @@ SMULL_INST:
   if (s_bit) {
     USMULL_NZ(arm);
   }
+  cpu_cycle += 2;
   goto END;
 SMLAL_INST:
   result = (int32_t)rm * (int32_t)rs;
@@ -1458,6 +1493,7 @@ SMLAL_INST:
   if (s_bit) {
     USMULL_NZ(arm);
   }
+  cpu_cycle += 3;
   goto END;
 
 SWP_INST:
@@ -1467,6 +1503,7 @@ SWP_INST:
   MEM_READ(rn, shifter_operand, mem_read32);
   MEM_WRITE(rn, rm, mem_write32);
   *arm->reg_table[reg_count + RD_C] = shifter_operand;
+  cpu_cycle = 4;
   goto END;
 
 SWPB_INST:
@@ -1476,6 +1513,7 @@ SWPB_INST:
   MEM_READ(rn, shifter_operand, mem_read8);
   MEM_WRITE(rn, rm, mem_write8);
   *arm->reg_table[reg_count + RD_C] = shifter_operand;
+  cpu_cycle = 4;
 
 END:
   return cpu_cycle;
