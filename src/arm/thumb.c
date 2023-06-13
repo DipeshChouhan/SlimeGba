@@ -55,6 +55,7 @@ int thumb_exec(Arm *arm) {
   uint32_t *reg_p = NULL;
   uint32_t imm_value = 0;
   uint32_t address = 0;
+  int cpu_cycle = 0;
 
   static void *dp_inst_table[] = {
       &&ADD3, &&SUB3, &&ADD1, &&SUB1, &&MOV1, &&CMP1, &&ADD2, &&SUB2, &&LSL1,
@@ -170,6 +171,7 @@ DECODE:
     imm_value = SIGN_EXTEND(imm_value, 7);
     arm->general_regs[15] += (imm_value << 1);
     arm->curr_instruction = arm->general_regs[15];
+    cpu_cycle = 3;
     goto END;
 
   } else if ((OP_CODE & UNCOND_BRANCH_MASK) == UNCOND_BRANCH_DECODE) {
@@ -182,7 +184,9 @@ DECODE:
       imm_value = SIGN_EXTEND(imm_value, 10);
       arm->general_regs[15] += (imm_value << 1);
       arm->curr_instruction = arm->general_regs[15];
+      cpu_cycle = 3;
       goto END;
+
     } else if (temp == 0x1000) {
       // BL H = 10 form
       imm_value = SIGN_EXTEND(imm_value, 10);

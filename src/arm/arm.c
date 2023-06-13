@@ -35,6 +35,7 @@
 // !{DONE}
 
 // TODO check overflow flag setting !{DONE}
+// TODO check cycle counting of instructions when condition fails
 
 #include "arm.h"
 #include "../gba/gba.h"
