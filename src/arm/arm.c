@@ -281,6 +281,7 @@ void init_arm(Arm *arm) {
 }
 
 int arm_exec(Arm *arm) {
+// Purpose: if in debug mode, print the json object and exit for undefined instruction
 #ifdef DEBUG_ON
   if (arm->mode == UND) {
 
@@ -307,7 +308,7 @@ int arm_exec(Arm *arm) {
   int reg_count = 0;
   int s_bit = 0;
   uint32_t shift = 0;
-  uint32_t cpu_cycle = 0;
+  uint32_t cpu_cycle = 1;
 
   uint32_t shift_imm = 0;
   uint32_t rotate_imm = 0;
@@ -339,7 +340,8 @@ FETCH:
 
   goto *cond_field_table[OP_CODE >> 28];
 
-// check for conditions and set execute_instruction to 1
+  // check condition of instruction, if unexecuted, goto END with cpu_cycle = 1
+
 CHECK_EQ:
   if (IS_BIT_SET(arm->cpsr, ZF_BIT)) {
     goto DECODE;
@@ -982,7 +984,9 @@ CONTROL:
     } else {
       *reg_p = arm->cpsr;
     }
+#ifdef DEBUG_ON
     write_instruction_log(arm, "MRS");
+#endif
     goto END;
 
   } else if ((OP_CODE & MSR_IMM_MASK) == MSR_IMM_DECODE) {
@@ -1073,7 +1077,9 @@ BRANCH_LINK:
   }
   arm->general_regs[R_15] += shifter_operand;
   arm->curr_instruction = arm->general_regs[R_15];
+#ifdef DEBUG_ON
   write_instruction_log(arm, "B,BL");
+#endif
   cpu_cycle = 3;
   goto END;
 COPROCESSOR:
