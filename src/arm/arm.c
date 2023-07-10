@@ -35,7 +35,10 @@
 // !{DONE}
 
 // TODO check overflow flag setting !{DONE}
-// TODO check cycle counting of instructions when condition fails
+// TODO check cycle counting of instructions when condition fails [DONE - its 1
+// cycle only]
+// TODO check cycle counting for thumb instructions [NOT DONE]
+// TODO correct cycle counting for arm multiply instructions [DONE]
 
 #include "arm.h"
 #include "../gba/gba.h"
@@ -281,7 +284,8 @@ void init_arm(Arm *arm) {
 }
 
 int arm_exec(Arm *arm) {
-// Purpose: if in debug mode, print the json object and exit for undefined instruction
+// Purpose: if in debug mode, print the json object and exit for undefined
+// instruction
 #ifdef DEBUG_ON
   if (arm->mode == UND) {
 
@@ -436,33 +440,27 @@ DECODE:
     // couting m for cycles
     // TODO - check for correctness [--not correct--]
 
-    shifter_operand = rs >> 8;
-    shift = rm >> 8;
+    shifter_operand = rs & 0xFFFFFF00;
 
-    if ((shifter_operand == 0x0 || shifter_operand == 0xFFFFFF) &&
-        shifter_operand == shift) {
+    if ((shifter_operand == 0x0 || shifter_operand == 0xFFFFFF00)) {
       //[32:8]
-      cpu_cycle = 1 + 2;
+      cpu_cycle = 1;
       goto *mul_inst_table[temp];
     }
-    shifter_operand = rs >> 16;
-    shift = rm >> 16;
-    if ((shifter_operand == 0x0 || shifter_operand == 0xFFFF) &&
-        shifter_operand == shift) {
+    shifter_operand = rs & 0xFFFF0000;
+    if ((shifter_operand == 0x0 || shifter_operand == 0xFFFF0000)) {
       //[32:16]
-      cpu_cycle = 2 + 2;
+      cpu_cycle = 2;
       goto *mul_inst_table[temp];
     }
-    shifter_operand = rs >> 24;
-    shift = rm >> 24;
-    if ((shifter_operand == 0x0 || shifter_operand == 0xFF) &&
-        shifter_operand == shift) {
+    shifter_operand = rs & 0xFF000000;
+    if ((shifter_operand == 0x0 || shifter_operand == 0xFF000000)) {
       // [32:24]
-      cpu_cycle = 3 + 2;
+      cpu_cycle = 3;
       goto *mul_inst_table[temp];
     }
 
-    cpu_cycle = 4 + 2;
+    cpu_cycle = 4;
 
     goto *mul_inst_table[temp];
   } else if ((OP_CODE & LOAD_STORE_H_D_S_MASK) == LOAD_STORE_H_D_S_DECODE) {
