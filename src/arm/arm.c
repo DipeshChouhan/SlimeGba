@@ -434,7 +434,7 @@ DECODE:
     s_bit = S_BIT;
 
     // couting m for cycles
-    // TODO - check for correctness
+    // TODO - check for correctness [--not correct--]
 
     shifter_operand = rs >> 8;
     shift = rm >> 8;

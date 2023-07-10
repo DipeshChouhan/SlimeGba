@@ -55,7 +55,7 @@ int thumb_exec(Arm *arm) {
   uint32_t *reg_p = NULL;
   uint32_t imm_value = 0;
   uint32_t address = 0;
-  int cpu_cycle = 0;
+  int cpu_cycle = 1;
 
   static void *dp_inst_table[] = {
       &&ADD3, &&SUB3, &&ADD1, &&SUB1, &&MOV1, &&CMP1, &&ADD2, &&SUB2, &&LSL1,
@@ -79,6 +79,7 @@ DECODE:
     // write_decoder_log(arm, "SWI");
     // swi
     SWI_INSTRUCTION(arm);
+    cpu_cycle = 3;
     goto END;
   }
 
@@ -86,7 +87,7 @@ DECODE:
     // write_decoder_log(arm, "COND_BRANCH");
     // B1
     //
-  #ifdef DEBUG_ON
+#ifdef DEBUG_ON
     write_instruction_log(arm, "B");
 #endif
     goto *cond_field_table[(OP_CODE >> 8) & 0xF];
@@ -197,6 +198,7 @@ DECODE:
 #ifdef DEBUG_ON
       write_instruction_log(arm, "BL10");
 #endif
+      cpu_cycle = 4;
       goto END;
     } else if (temp == 0x1800) {
       // BL H = 11 form
@@ -225,7 +227,10 @@ DECODE:
     arm->state = rm & 1;
     arm->general_regs[15] = rm & 0xFFFFFFFE;
     arm->curr_instruction = arm->general_regs[15];
+#ifdef DEBUG_ON
     write_instruction_log(arm, "BX");
+#endif
+    cpu_cycle = 3;
     goto END;
 
   } else if ((OP_CODE & DATA_PROCESS_F1_MASK) == DATA_PROCESS_F1_DECODE) {
@@ -233,6 +238,7 @@ DECODE:
     rn = arm->general_regs[(OP_CODE >> 3) & 7];
     rm = arm->general_regs[(OP_CODE >> 6) & 7];
     reg_p = &arm->general_regs[OP_CODE & 7];
+    cpu_cycle = 1;
     if (IS_BIT_SET(OP_CODE, 9)) {
       goto SUB3;
     }
@@ -243,6 +249,7 @@ DECODE:
     rn = arm->general_regs[(OP_CODE >> 3) & 7];
     reg_p = &arm->general_regs[OP_CODE & 7];
     imm_value = (OP_CODE >> 6) & 7;
+    cpu_cycle = 1;
     if (IS_BIT_SET(OP_CODE, 9)) {
       goto SUB1;
     }
@@ -253,6 +260,7 @@ DECODE:
     // write_decoder_log(arm, "Thumb Data Processing Instruction");
     reg_p = &arm->general_regs[(OP_CODE >> 8) & 7];
     imm_value = OP_CODE & 0xFF;
+    cpu_cycle = 1;
     goto *dp_inst_table[4 + ((OP_CODE >> 11) & 3)];
 
   } else if ((OP_CODE & DATA_PROCESS_F4_MASK) == DATA_PROCESS_F4_DECODE) {
@@ -260,6 +268,7 @@ DECODE:
     rm = arm->general_regs[(OP_CODE >> 3) & 7];
     reg_p = &arm->general_regs[OP_CODE & 7];
     imm_value = (OP_CODE >> 6) & 31;
+    cpu_cycle = 1;
     goto *dp_inst_table[8 + ((OP_CODE >> 11) & 3)];
 
   } else if ((OP_CODE & DATA_PROCESS_F5_MASK) == DATA_PROCESS_F5_DECODE) {
@@ -316,12 +325,14 @@ DECODE:
     imm_value = immed_5 * 4;
     address = RN_F1 + imm_value;
     MEM_READ(address, RD_F1, mem_read32);
+    cpu_cycle = 3;
     goto END;
 
   } else if (temp == LDRB1_DECODE) {
     // write_decoder_log(arm, "LDRB1");
     address = RN_F1 + immed_5;
     MEM_READ(address, RD_F1, mem_read8);
+    cpu_cycle = 3;
     goto END;
 
   } else if (temp == LDRH1_DECODE) {
@@ -329,6 +340,7 @@ DECODE:
     imm_value = immed_5 * 2;
     address = RN_F1 + imm_value;
     MEM_READ(address, RD_F1, mem_read16);
+    cpu_cycle = 3;
     goto END;
 
   } else if (temp == STR1_DECODE) {
@@ -336,12 +348,14 @@ DECODE:
     imm_value = immed_5 * 4;
     address = RN_F1 + imm_value;
     MEM_WRITE(address, RD_F1, mem_write32);
+    cpu_cycle = 2;
     goto END;
 
   } else if (temp == STRB1_DECODE) {
     // write_decoder_log(arm, "STRB1");
     address = RN_F1 + immed_5;
     MEM_WRITE(address, RD_F1, mem_write8);
+    cpu_cycle = 2;
     goto END;
 
   } else if (temp == STRH1_DECODE) {
@@ -349,6 +363,7 @@ DECODE:
     imm_value = immed_5 * 2;
     address = RN_F1 + imm_value;
     MEM_WRITE(address, RD_F1, mem_write16);
+    cpu_cycle = 2;
     goto END;
 
   } else if (temp == LDR3_DECODE) {
@@ -357,6 +372,7 @@ DECODE:
     imm_value = immed_8 * 4;
     address = (arm->general_regs[15] & 0xFFFFFFFC) + imm_value;
     MEM_READ(address, RD_F3, mem_read32);
+    cpu_cycle = 3;
     goto END;
   } else if (temp == LDR4_DECODE) {
     // write_decoder_log(arm, "LDR4");
@@ -364,6 +380,7 @@ DECODE:
     imm_value = immed_8 * 4;
     address = *arm->reg_table[reg_count + 13] + imm_value;
     MEM_READ(address, RD_F3, mem_read32);
+    cpu_cycle = 3;
     goto END;
 
   } else if (temp == STR3_DECODE) {
@@ -372,6 +389,7 @@ DECODE:
     imm_value = immed_8 * 4;
     address = *arm->reg_table[reg_count + 13] + imm_value;
     MEM_WRITE(address, RD_F3, mem_write32);
+    cpu_cycle = 2;
     goto END;
 
   } else if (temp == LDMIA_DECODE) {
@@ -390,8 +408,11 @@ DECODE:
       ++reg_count;
     }
 
+
+
     assert(((RN_F3 + (rm * 4)) - 4) == address - 4);
     RN_F3 = RN_F3 + (rm * 4);
+    cpu_cycle = rm + 2;
     goto END;
 
   } else if (temp == STMIA_DECODE) {
@@ -412,6 +433,7 @@ DECODE:
 
     assert(((RN_F3 + (rm * 4)) - 4) == address - 4);
     RN_F3 = RN_F3 + (rm * 4);
+    cpu_cycle = rm + 1;
     goto END;
   }
 
@@ -421,29 +443,35 @@ DECODE:
   if (temp == LDR2_DECODE) {
     // write_decoder_log(arm, "LDR2");
     MEM_READ(address, RD_F1, mem_read32);
+    cpu_cycle = 3;
     goto END;
 
   } else if (temp == LDRB2_DECODE) {
     // write_decoder_log(arm, "LDRB2");
     MEM_READ(address, RD_F1, mem_read8);
+    cpu_cycle = 3;
     goto END;
   } else if (temp == LDRH2_DECODE) {
     // write_decoder_log(arm, "LDRH2");
     MEM_READ(address, RD_F1, mem_read16);
+    cpu_cycle = 3;
     goto END;
 
   } else if (temp == STR2_DECODE) {
     // write_decoder_log(arm, "STR2");
     MEM_WRITE(address, RD_F1, mem_write32);
+    cpu_cycle = 2;
     goto END;
   } else if (temp == STRB2_DECODE) {
     // write_decoder_log(arm, "STRB2");
     MEM_WRITE(address, RD_F1, mem_write8);
+    cpu_cycle = 2;
     goto END;
 
   } else if (temp == STRH2_DECODE) {
     // write_decoder_log(arm, "STRH2");
     MEM_WRITE(address, RD_F1, mem_write16);
+    cpu_cycle = 2;
     goto END;
 
   } else if (temp == LDRSB_DECODE) {
@@ -451,6 +479,7 @@ DECODE:
     MEM_READ(address, imm_value, mem_read8);
     imm_value = SIGN_EXTEND(imm_value, 7);
     RD_F1 = imm_value;
+    cpu_cycle = 3;
     goto END;
 
   } else if (temp == LDRSH_DECODE) {
@@ -458,6 +487,7 @@ DECODE:
     MEM_READ(address, imm_value, mem_read16);
     imm_value = SIGN_EXTEND(imm_value, 15);
     RD_F1 = imm_value;
+    cpu_cycle = 3;
     goto END;
   } else if (temp == PUSH) {
     // write_decoder_log(arm, "PUSH");
@@ -489,6 +519,7 @@ DECODE:
     }
     assert((*arm->reg_table[reg_count + 13] - 4) == address - 4);
     *arm->reg_table[reg_count + 13] -= 4 * (rn + rm);
+    cpu_cycle = rm + rn + 1;
     goto END;
 
   } else if (temp == POP) {
@@ -518,6 +549,9 @@ DECODE:
     assert((*arm->reg_table[reg_count + 13] + 4 * (rn + rm)) == address);
     *arm->reg_table[reg_count + 13] =
         *arm->reg_table[reg_count + 13] + 4 * (rn + rm);
+    
+
+    cpu_cycle = rm + (rn * 2) + 2;
     goto END;
   }
 
@@ -649,6 +683,7 @@ AND:
 #ifdef DEBUG_ON
   write_instruction_log(arm, "AND");
 #endif
+  cpu_cycle = 1;
   goto END;
 EOR:
   *reg_p = (*reg_p) ^ rm;
@@ -656,6 +691,7 @@ EOR:
 #ifdef DEBUG_ON
   write_instruction_log(arm, "EOR");
 #endif
+  cpu_cycle = 1;
   goto END;
 LSL2:
   imm_value = rm & 0xFF;
@@ -679,6 +715,7 @@ LSL2:
 #ifdef DEBUG_ON
   write_instruction_log(arm, "LSL2");
 #endif
+  cpu_cycle = 2;
   goto END;
 LSR2:
 
@@ -700,6 +737,7 @@ LSR2:
 #ifdef DEBUG_ON
   write_instruction_log(arm, "LSR2");
 #endif
+  cpu_cycle = 2;
   goto END;
 ASR2:
   rm = rm & 0xFF;
@@ -723,6 +761,7 @@ ASR2:
 #ifdef DEBUG_ON
   write_instruction_log(arm, "ASR2");
 #endif
+  cpu_cycle = 2;
   goto END;
 ADC:
   result = *reg_p + (uint64_t)rm + IS_BIT_SET(arm->cpsr, CF_BIT);
@@ -731,6 +770,7 @@ ADC:
 #ifdef DEBUG_ON
   write_instruction_log(arm, "ADC");
 #endif
+  cpu_cycle = 1;
   goto END;
 SBC:
   rm = (~rm);
@@ -741,6 +781,7 @@ SBC:
 #ifdef DEBUG_ON
   write_instruction_log(arm, "SBC");
 #endif
+  cpu_cycle = 1;
   goto END;
 ROR:
   if ((rm & 0xFF) == 0) {
@@ -756,6 +797,7 @@ ROR:
 #ifdef DEBUG_ON
   write_instruction_log(arm, "ROR");
 #endif
+  cpu_cycle = 2;
   goto END;
 TST:
   result = *reg_p & rm;
@@ -763,6 +805,7 @@ TST:
 #ifdef DEBUG_ON
   write_instruction_log(arm, "TST");
 #endif
+  cpu_cycle = 1;
   goto END;
 NEG:
   rm = (~rm) + 1;
@@ -772,6 +815,7 @@ NEG:
 #ifdef DEBUG_ON
   write_instruction_log(arm, "NEG");
 #endif
+  cpu_cycle = 1;
   goto END;
 CMP2:
   rm = (~rm);
@@ -782,6 +826,7 @@ CMP2:
 #ifdef DEBUG_ON
   write_instruction_log(arm, "CMP2");
 #endif
+  cpu_cycle = 1;
   goto END;
 
 CMN:
@@ -790,6 +835,7 @@ CMN:
 #ifdef DEBUG_ON
   write_instruction_log(arm, "CMN");
 #endif
+  cpu_cycle = 1;
   goto END;
 ORR:
   *reg_p = (*reg_p) | rm;
@@ -797,13 +843,32 @@ ORR:
 #ifdef DEBUG_ON
   write_instruction_log(arm, "ORR");
 #endif
+  cpu_cycle = 1;
   goto END;
 MUL:
   *reg_p = (rm * (*reg_p));
+  temp = rm & 0xFFFFFF00;
+  cpu_cycle = 1 + 4;
   FLAGS_NZ(*reg_p, *reg_p);
+
 #ifdef DEBUG_ON
   write_instruction_log(arm, "MUL");
 #endif
+  if (temp == 0 || temp == 0xFFFFFF00) {
+    cpu_cycle = 1 + 1;
+    goto END;
+  }
+
+  temp = rm & 0xFFFF0000;
+  if (temp == 0 || temp == 0xFFFF0000) {
+    cpu_cycle = 1 + 2;
+    goto END;
+  }
+
+  temp = rm & 0xFF000000;
+  if (temp == 0 || temp == 0xFF000000) {
+    cpu_cycle = 1 + 3;
+  }
   goto END;
 BIC:
   *reg_p = *reg_p & (~rm);
@@ -811,6 +876,7 @@ BIC:
 #ifdef DEBUG_ON
   write_instruction_log(arm, "BIC");
 #endif
+  cpu_cycle = 1;
   goto END;
 MVN:
   *reg_p = (~rm);
@@ -824,18 +890,21 @@ ADD5:
 #ifdef DEBUG_ON
   write_instruction_log(arm, "ADD5");
 #endif
+  cpu_cycle = 1;
   goto END;
 ADD6:
   *reg_p = (uint64_t)rn + (imm_value << 2);
 #ifdef DEBUG_ON
   write_instruction_log(arm, "ADD6");
 #endif
+  cpu_cycle = 1;
   goto END;
 ADD7:
   *reg_p = (uint64_t)*reg_p + (imm_value << 2);
 #ifdef DEBUG_ON
   write_instruction_log(arm, "ADD7");
 #endif
+  cpu_cycle = 1;
   goto END;
 SUB4:
   imm_value <<= 2;
@@ -846,10 +915,13 @@ SUB4:
 #ifdef DEBUG_ON
   write_instruction_log(arm, "SUB4");
 #endif
+  cpu_cycle = 1;
   goto END;
 ADD4:
   *reg_p = *reg_p + (uint64_t)rm;
+  cpu_cycle = 1;
   if (reg_p == arm->reg_table[15]) {
+    cpu_cycle = 3;
     arm->general_regs[15] = *reg_p & 0xFFFFFFFE;
     arm->curr_instruction = arm->general_regs[15];
   }
@@ -865,10 +937,13 @@ CMP3:
 #ifdef DEBUG_ON
   write_instruction_log(arm, "CMP3");
 #endif
+  cpu_cycle = 1;
   goto END;
 MOV3:
   *reg_p = rm;
+  cpu_cycle = 1;
   if (reg_p == arm->reg_table[15]) {
+    cpu_cycle = 3;
     *reg_p &= 0xFFFFFFFE;
     arm->curr_instruction = *reg_p;
   }
@@ -878,6 +953,11 @@ MOV3:
 #endif
   goto END;
 CPY:
+  // Instruction only supports T variants of ARMv6 and above
+#ifdef DEBUG_ON
+  write_instruction_log(arm, "CPY");
+  exit(1);
+#endif
 UNDEFINED:
   printf("Undefined\n");
   exit(1);
